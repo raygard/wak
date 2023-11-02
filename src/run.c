@@ -102,7 +102,7 @@ static int match(zvalue *zvsubject, zvalue *zvpat)
   regex_t rx, *rxp = &rx;
   val_to_str(zvsubject);
   rx_zvalue_compile(&rxp, zvpat);
-  if ((r = regexec(rxp, zvsubject->vst->str, 0, NULL, 0)) != 0) {
+  if ((r = regexec(rxp, zvsubject->vst->str, 0, 0, 0)) != 0) {
     if (r != REG_NOMATCH) {
       char errbuf[256];
       regerror(r, &rx, errbuf, sizeof(errbuf));
@@ -206,7 +206,7 @@ static regex_t *rx_prep(char *fs)
 static void set_map_element(zmap *m, int k, char *val, size_t len)
 {
   // Do not need format here b/c k is integer, uses "%lld" format.
-  zstring *key = num_to_zstring(k, NULL);
+  zstring *key = num_to_zstring(k, 0);
   zmapslot *zs = zmap_find_or_insert_key(m, key);
   zstring_release(&key);
   zs->val.vst = zstring_update(zs->val.vst, 0, val, len);
@@ -292,7 +292,7 @@ static void build_fields(void)
   char *rec = FIELD[0].vst->str;
   // TODO test this -- why did I not want to split empty $0?
   // Maybe don't split empty $0 b/c non-default FS gets NF==1 with splitter()?
-  set_nf(*rec ? splitter(set_field, NULL, rec, &STACK[FS]) : 0);
+  set_nf(*rec ? splitter(set_field, 0, rec, &STACK[FS]) : 0);
 }
 
 static void rebuild_field0(void)
@@ -677,7 +677,7 @@ static int close_file(void)
 static FILE *setup_file(char *file_or_pipe, char *mode)
 {
   val_to_str(STKP);   // filename at top of stack
-  zfile *zof = NULL;
+  zfile *zof = 0;
   // is it already open in file table?
   for (int k = 0; k < file_cnt; k++) {
     zof = &files[k];
@@ -919,7 +919,7 @@ static char *nextfilearg(void)
 {
   char *arg;
   do {
-    if (++rgl.narg >= (int)val_to_num(&STACK[ARGC])) return NULL;
+    if (++rgl.narg >= (int)val_to_num(&STACK[ARGC])) return 0;
     zvalue *v = &STACK[ARGV];
     zvalue zkey = ZVINIT(ZF_STR, 0,
         num_to_zstring(rgl.narg, val_to_str(&STACK[CONVFMT])->vst->str));
@@ -1160,7 +1160,7 @@ static void math_builtin(int opcode, int nargs)
     case tksrand:
       if (nargs == 1) {
         STKP->num = seed_jkiss32((unsigned)trunc(val_to_num(STKP)));
-      } else push_int_val(seed_jkiss32((unsigned)time(NULL)));
+      } else push_int_val(seed_jkiss32((unsigned)time(0)));
       break;
     default:
       if (tkcos <= opcode && opcode <= tksqrt) {
@@ -1756,7 +1756,7 @@ static int interpx(int start, int *status)
         // if tkgetline 2 tkpipe:  var
         // Ensure pipe cmd on top
         if (nargs == 2 && source == tkpipe) swap();
-        FILE *fp = NULL;
+        FILE *fp = 0;
         if (source == tklt || source == tkpipe) {
           fp = setup_file(source == tklt ? "f" : "p", "r");
           nargs--;
@@ -1769,7 +1769,7 @@ static int interpx(int start, int *status)
         //  1 tklt:    (lvalue)  from  named file in 'stream'
         //  0 tkpipe:  (nothing) from piped command in 'stream'
         //  1 tkpipe:  (lvalue)  from piped command in 'stream'
-        v = nargs ? setup_lvalue(stkptr, parmbase, &field_num) : NULL;
+        v = nargs ? setup_lvalue(stkptr, parmbase, &field_num) : 0;
         if (v) drop();
 
 

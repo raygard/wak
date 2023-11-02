@@ -20,10 +20,10 @@ static void progfiles_init(char *progstring, char **progfiles,
   scs->progfiles = progfiles;
   scs->cur_progfile = 0;
   scs->filename = "(None)";  // Not needed...
-  scs->line = NULL;   // for getline()
+  scs->line = 0;      // for getline()
   scs->line_size = 0; // for getline()
   scs->line_num = 0;  // Not needed...
-  scs->fp = NULL;     // For get_char() initial state.
+  scs->fp = 0;        // For get_char() initial state.
 
   scs->tok = 0;
   scs->tokbuiltin = 0;
@@ -81,7 +81,7 @@ int main(int argc, char **argv, char **envp)
   int num_assignments = 0, num_progfiles = 0;
   char *assignments[42];
   char *progfiles[42];
-  char *progstring = NULL;
+  char *progstring = 0;
   int opt_test_scanner = 0;
   int opt_dump_symbols = 0;
   int opt_run_prog = 1;

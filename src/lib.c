@@ -29,7 +29,7 @@ EXTERN void error_exit(char *format, ...)
 EXTERN void *xmalloc(size_t size)
 {
   void *p = malloc(size);
-  if (p == NULL)
+  if (!p)
     error_exit("%s\n", "Out of memory.");
   return p;
 }
@@ -37,7 +37,7 @@ EXTERN void *xmalloc(size_t size)
 EXTERN void *xrealloc(void *p, size_t size)
 {
   p = realloc(p, size);
-  if (p == NULL)
+  if (!p)
     error_exit("%s\n", "Out of memory.");
   return p;
 }
@@ -45,7 +45,7 @@ EXTERN void *xrealloc(void *p, size_t size)
 EXTERN void *xzalloc(size_t size)
 {
   void *p = calloc(1, size);
-  if (p == NULL)
+  if (!p)
     error_exit("%s\n", "Out of memory.");
   return p;
 }
@@ -53,7 +53,7 @@ EXTERN void *xzalloc(size_t size)
 EXTERN char *xstrdup(char *s)
 {
   char *p = strdup(s);
-  if (p == NULL)
+  if (!p)
     error_exit("%s\n", "Out of memory.");
   return p;
 }

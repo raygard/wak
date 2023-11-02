@@ -27,7 +27,7 @@ static void progfile_open(void)
   scs->fp = stdin;
   if (strcmp(scs->filename, "-"))
     scs->fp = fopen(scs->filename, "r");
-  if (scs->fp == NULL)
+  if (!scs->fp)
     error_exit("Can't open %s.\n", scs->filename);
   scs->line_num = 0;
 }
@@ -48,7 +48,7 @@ static int get_char(void)
     }
     // Here if getting from progfile(s).
     if (scs->line == nl) return EOF;
-    if (scs->fp == NULL) {
+    if (!scs->fp) {
       progfile_open();
     // The "  " + 1 is to set p to null string but allow ref to prev char for
     // "lastchar" test below.
@@ -65,7 +65,7 @@ static int get_char(void)
     // EOF
     // FIXME TODO or check for error? feof() vs. ferror()
     fclose(scs->fp);
-    scs->fp = NULL;
+    scs->fp = 0;
     scs->p = "  " + 2;
     scs->cur_progfile++;
     if (scs->cur_progfile >= scs->num_progfiles) {
@@ -112,7 +112,7 @@ static int find_keyword_or_builtin(char *table,
   strcat(s, scs->tokstr);
   strcat(s, " ");
   p = strstr(table, s);
-  if (p == NULL)
+  if (!p)
     return 0;
   return first_tok_in_table + (p - table) / 10;
 }
@@ -125,7 +125,7 @@ static int find_token(void)
   strcat(s, scs->tokstr);
   strcat(s, " ");
   p = strstr(ops, s);
-  if (p == NULL)
+  if (!p)
     return 0;
   return tksemi + (p - ops) / 3;
 }

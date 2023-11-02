@@ -1017,7 +1017,7 @@ static void simple_stmt(void)
 
 static int prev_was_terminated(void)
 {
-  return strchr(stmtendsy, prevtok) != NULL;
+  return !!strchr(stmtendsy, prevtok);
 }
 
 static int have_nl_semi(void)

@@ -108,7 +108,7 @@ EXTERN size_t zlist_append(zlist *p, void *obj)
   // Insert obj (p->size bytes) at end of list, expand as needed.
   // Return scaled offset to newly inserted obj; i.e. the
   // "slot number" 0, 1, 2,...
-  void *objtemp = NULL;
+  void *objtemp = 0;
   if (p->avail > p->limit - p->size) {
     objtemp = xmalloc(p->size);     // Copy obj in case it is in
     memmove(objtemp, obj, p->size); // the area realloc might free!
@@ -136,7 +136,7 @@ EXTERN int zlist_len(zlist *p)
 EXTERN void zstring_release(zstring **s)
 {
   if (*s && (**s).refcnt-- == 0) xfree(*s); //free_zstring(s);
-  *s = NULL;
+  *s = 0;
 }
 
 EXTERN void zstring_incr_refcnt(zstring *s)
@@ -173,7 +173,7 @@ EXTERN zstring *zstring_update(zstring *to, size_t at, char *s, size_t n)
 {
   if (to && to->refcnt) {
     zstring *to_before = to;
-    to = zstring_modify(NULL, 0, to->str, to->size);
+    to = zstring_modify(0, 0, to->str, to->size);
     zstring_release(&to_before);
   }
   return zstring_modify(to, at, s, n);
@@ -191,7 +191,7 @@ EXTERN zstring *zstring_extend(zstring *to, zstring *from)
 
 EXTERN zstring *new_zstring(char *s, size_t size)
 {
-  return zstring_modify(NULL, 0, s, size);
+  return zstring_modify(0, 0, s, size);
 }
 
 ////////////////////
@@ -283,7 +283,7 @@ enum { PSHIFT = 5 };  // "perturb" shift -- see find_mapslot() below
 
 static zmapslot *find_mapslot(zmap *m, zstring *key, int *hash, int *probe)
 {
-  zmapslot *x = NULL;
+  zmapslot *x = 0;
   *hash = zstring_hash(key);
   unsigned perturb = *hash;
   *probe = *hash & m->mask;
@@ -308,14 +308,14 @@ static zmapslot *find_mapslot(zmap *m, zstring *key, int *hash, int *probe)
     // the Python dict implementation for more details.
     *probe = (*probe * 5 + 1 + (perturb >>= PSHIFT)) & m->mask;
   }
-  return NULL;
+  return 0;
 }
 
 EXTERN zvalue *zmap_find(zmap *m, zstring *key)
 {
   int hash, probe;
   zmapslot *x = find_mapslot(m, key, &hash, &probe);
-  return x ? &x->val : NULL;
+  return x ? &x->val : 0;
 }
 
 static void zmap_init(zmap *m)
