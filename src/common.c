@@ -405,7 +405,7 @@ EXTERN void zmap_delete(zmap *m, zstring *key)
 {
   int hash, probe;
   zmapslot *x = find_mapslot(m, key, &hash, &probe);
-  if (! x) return;
+  if (!x) return;
   zstring_release(&MAPSLOT[m->hash[probe] - 1].key);
   m->hash[probe] = -1;
   m->deleted++;

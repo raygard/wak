@@ -1596,7 +1596,7 @@ static int interpx(int start, int *status)
         k = op2 < 0 ? parmbase - op2 : op2;
         v = &STACK[k];
         force_maybemap_to_map(v);
-        if (! (is_map(v))) fatal("scalar in array context");
+        if (!(is_map(v))) fatal("scalar in array context");
         v = get_map_val(v, STKP);
         drop();     // drop subscript
         push_val(v);
@@ -1604,7 +1604,7 @@ static int interpx(int start, int *status)
 
       case tkin:
         val_to_str(STKP-1);
-        if (! (STKP->flags & ZF_ANYMAP)) fatal("scalar in array context");
+        if (!(STKP->flags & ZF_ANYMAP)) fatal("scalar in array context");
         v = zmap_find(STKP->map, STKP[-1].vst);
         drop();
         drop();
@@ -1615,7 +1615,7 @@ static int interpx(int start, int *status)
         op2 = *ip++;
         v = STKP-1;
         force_maybemap_to_map(v);
-        if (! (is_map(v))) fatal("scalar in array context");
+        if (!(is_map(v))) fatal("scalar in array context");
         zmap *m = v->map;   // Need for MAPSLOT macro (in map.h)
         int zlen = zlist_len(&m->slot);
         int kk = STKP->num + 1;

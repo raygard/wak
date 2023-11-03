@@ -326,7 +326,7 @@ static int find_or_add_var_name(void)
     slotnum = -LOCAL[locals_ent].slotnum;
   } else {
     globals_ent = find_global(tokstr);
-    if (! globals_ent) globals_ent = add_global(tokstr);
+    if (!globals_ent) globals_ent = add_global(tokstr);
     slotnum = GLOBAL[globals_ent].slotnum;
     if (find_func_def_entry(tokstr))
       // POSIX: The same name shall not be used both as a variable name
@@ -454,7 +454,7 @@ static void function_call(void)
     strcpy(builtin_name, tokstr);
   } else if (scs->tok == tkfunc) { // user function
     funcnum = find_func_def_entry(tokstr);
-    if (! funcnum)
+    if (!funcnum)
       funcnum = add_func_def_entry(tokstr);
     FUNC_DEF[funcnum].flags |= FUNC_CALLED;
     gen2cd(opprepcall, funcnum);
@@ -1133,7 +1133,7 @@ static void for_not_map_iter(void)
   cgl.break_dest = zcode_last + 1;
   gen2cd(opjump, -1);
   cgl.continue_dest = zcode_last + 1;
-  if (! istok(tkrparen))
+  if (!istok(tkrparen))
     simple_stmt();  // "increment"
   gen2cd(opjump, condition_loc - zcode_last - 3);
   rparen();
@@ -1162,14 +1162,14 @@ static void for_stmt(void)
   } else {
     int loop_start_loc = zcode_last + 1;
     simple_stmt();  // initializaton part, OR varname in arrayname form
-    if (! havetok(tkrparen)) {
+    if (!havetok(tkrparen)) {
       expect(tksemi);
       for_not_map_iter();
     } else {
       // Must be map iteration
       // Check here for varname in varname!
       // FIXME TODO must examine generated zcode for var in array?
-      if (! valid_for_array_iteration(loop_start_loc, zcode_last))
+      if (!valid_for_array_iteration(loop_start_loc, zcode_last))
         xerr("%s", "bad 'for (var in array)' loop\n");
       else {
         ZCODE[zcode_last-5] = opvarref;
@@ -1267,7 +1267,7 @@ static void stmt(void)
 
 static void add_param(int funcnum, char *s)
 {
-  if (! find_local_entry(s))
+  if (!find_local_entry(s))
     add_local_entry(s);
   else
     xerr("function '%s' dup param '%s'\n", FUNC_DEF[funcnum].name, s);
@@ -1289,7 +1289,7 @@ static void function_def(void)
 {
   expect(tkfunction);
   int funcnum = find_func_def_entry(tokstr);
-  if (! funcnum) {
+  if (!funcnum) {
     funcnum = add_func_def_entry(tokstr);
   } else if (FUNC_DEF[funcnum].flags & FUNC_DEFINED) {
     xerr("dup defined function '%s'\n", tokstr);
