@@ -1135,6 +1135,13 @@ static void gsub(int opcode, int nargs, int parmbase)
   if (field_num >= 0) fixup_fields(field_num);
 }
 
+static long time_ms(void)
+{
+  struct timespec ts;
+  clock_gettime(CLOCK_REALTIME, &ts);
+  return ts.tv_sec*1000+ts.tv_nsec/1000000;
+}
+
 static double (*mathfunc[])(double) = {cos, sin, exp, log, sqrt};
 static void math_builtin(int opcode, int nargs)
 {
@@ -1160,7 +1167,7 @@ static void math_builtin(int opcode, int nargs)
     case tksrand:
       if (nargs == 1) {
         STKP->num = seed_jkiss32((unsigned)trunc(val_to_num(STKP)));
-      } else push_int_val(seed_jkiss32((unsigned)time(0)));
+      } else push_int_val(seed_jkiss32((unsigned)time_ms()));
       break;
     default:
       if (tkcos <= opcode && opcode <= tksqrt) {
