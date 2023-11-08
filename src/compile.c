@@ -240,6 +240,12 @@ static void complain(int tk, int lno)
     char op[3];
     get_token_text(op, tk);
     xerr("(%d) syntax near '%s' -- '%s' expected\n", lno, tokstr, op);
+  } else if (tk >= tkin && tk <= tksubstr) {
+    char tkstr[10];
+    if (tk < tkatan2) memmove(tkstr, keywords + 1 + 10 * (tk - tkin), 10);
+    else memmove(tkstr, builtins + 1 + 10 * (tk - tkatan2), 10);
+    *strchr(tkstr, ' ') = 0;
+    xerr("(%d) syntax near '%s' -- '%s' expected\n", lno, tokstr, tkstr);
   } else {
     // FIXME FIXME make better
     xerr("(%d) syntax near '%s' (%d)\n", lno, tokstr, tk);
@@ -277,13 +283,13 @@ static void check_tk_with_recovery(int tk, int lno)
 
 #define expect(tk) check_tk_with_recovery(tk, __LINE__)
 
-static void optnlsemi(void)
+static void optional_nl_or_semi(void)
 {
   while (havetok(tknl) || havetok(tksemi))
     ;
 }
 
-static void optnl(void)
+static void optional_nl(void)
 {
   while (havetok(tknl))
     ;
@@ -292,15 +298,14 @@ static void optnl(void)
 static void rparen(void)
 {
   expect(tkrparen);
-  optnl();
+  optional_nl();
 }
 
 
 static int have_comma(void)
 {
-  if (!havetok(tkcomma))
-    return 0;
-  optnl();
+  if (!havetok(tkcomma)) return 0;
+  optional_nl();
   return 1;
 }
 
@@ -374,7 +379,7 @@ static void builtin_call(int tk, char *builtin_name)
         scan();
       } else expr();
       expect(tkcomma);
-      optnl();
+      optional_nl();
       expr();
       if (have_comma()) {
         lvalue();
@@ -387,7 +392,7 @@ static void builtin_call(int tk, char *builtin_name)
     case tkmatch:
       expr();
       expect(tkcomma);
-      optnl();
+      optional_nl();
       if (istok(tkregex)) {
         gen2cd(tkregex, make_literal_regex_val(tokstr));
         scan();
@@ -397,7 +402,7 @@ static void builtin_call(int tk, char *builtin_name)
     case tksplit:
       expr();
       expect(tkcomma);
-      optnl();
+      optional_nl();
       if (istok(tkvar) && (scs->ch == ',' || scs->ch == ')')) {
         map_name();
         scan();
@@ -636,7 +641,7 @@ static void lvalue(void)
     var();
     convert_push_to_reference();
   } else {
-    xerr("In primary: syntax near '%s' (bad lvalue)\n", tokstr);
+    xerr("syntax near '%s' (bad lvalue)\n", tokstr);
   }
 }
 
@@ -788,7 +793,7 @@ static int primary(void)
       gencd(modifier);
       break;
     default:
-      xerr("In primary: syntax near '%s'\n", tokstr[0] == '\n' ? "\\n" : tokstr);
+      xerr("syntax near '%s'\n", tokstr[0] == '\n' ? "\\n" : tokstr);
       skip_to(stmtendsy);
       break;
   }
@@ -830,7 +835,7 @@ static void binary_op(int optor)  // Also for ternary ?: optor.
 
   case tkand:
   case tkor:
-      optnl();
+      optional_nl();
       gen2cd(optor, -1);  // tkand: jump if false, else drop
       cdx = zcode_last;   // tkor:  jump if true, else drop
       exprn(rbp);
@@ -895,7 +900,7 @@ static void exprn(int rbp)
   // immediately follows print or printf, where it may still be followed
   // by 'in' ... unless at end of statement
   if (opnd_st > 0 && ! istok(tkin))
-    xerr("In primary: syntax near '%s'; expected 'in'\n", tokstr);
+    xerr("syntax near '%s'; expected 'in'\n", tokstr);
   if (opnd_st > 0) gen2cd(tkrbracket, opnd_st);
   // primary() has eaten subscripts, function args, postfix ops.
   // curtok() should be a binary op.
@@ -918,7 +923,7 @@ static void exprn(int rbp)
       lev--;
       return;
     }
-    xerr("In primary: syntax near '%s'\n", tokstr[0] == '\n' ? "\\n" : tokstr);
+    xerr("syntax near '%s'\n", tokstr[0] == '\n' ? "\\n" : tokstr);
     skip_to(stmtendsy);
   }
   if (cat_start_concated_expr(optor)) optor = tkcat;
@@ -1010,7 +1015,7 @@ static void simple_stmt(void)
       break;
     default:
       // FIXME error recovery needed! see testbad.awk
-      xerr("In simple_stmt: syntax near '%s'\n", tokstr[0] == '\n' ? "\\n" : tokstr);
+      xerr("syntax near '%s'\n", tokstr[0] == '\n' ? "\\n" : tokstr);
       skip_to(stmtendsy);
   }
 }
@@ -1020,7 +1025,7 @@ static int prev_was_terminated(void)
   return !!strchr(stmtendsy, prevtok);
 }
 
-static int have_nl_semi(void)
+static int is_nl_semi(void)
 {
   return istok(tknl) || istok(tksemi);
 }
@@ -1036,17 +1041,17 @@ static void if_stmt(void)
   gen2cd(tkif, -1);
   int cdx = zcode_last;
   stmt();
-  if (!prev_was_terminated() && have_nl_semi()) {
+  if (!prev_was_terminated() && is_nl_semi()) {
     scan();
-    optnl();
+    optional_nl();
   }
   if (prev_was_terminated()) {
-    optnl();
+    optional_nl();
     if (havetok(tkelse)) {
       gen2cd(tkelse, -1);
       ZCODE[cdx] = zcode_last - cdx;
       cdx = zcode_last;
-      optnl();
+      optional_nl();
       stmt();
     }
   }
@@ -1089,7 +1094,7 @@ static void do_stmt(void)
   int brk, cont;
   save_break_continue(&brk, &cont);
   expect(tkdo);
-  optnl();
+  optional_nl();
   gen2cd(opjump, 4);   // jump over jumps, to statement
   cgl.continue_dest = zcode_last + 1;
   gen2cd(opjump, -1);   // here on continue
@@ -1097,11 +1102,11 @@ static void do_stmt(void)
   gen2cd(opjump, -1);   // here on break
   stmt();
   if (!prev_was_terminated()) {
-    if (have_nl_semi()) {
+    if (is_nl_semi()) {
       scan();
-      optnl();
+      optional_nl();
     } else {
-      xerr("syntax near '%s' -- semicolon or newline expected\n", tokstr);
+      xerr("syntax near '%s' -- ';' or newline expected\n", tokstr);
       // FIXME
     }
   }
@@ -1124,12 +1129,12 @@ static void for_not_map_iter(void)
     // no NL allowed here in OTA
     gen2cd(opjump, -1);     // jump to statement
   } else {
-    optnl();                // NOT posix or awk book; in OTA
+    optional_nl();                // NOT posix or awk book; in OTA
     expr();                 // loop while true
     expect(tksemi);
     gen2cd(tkwhile, -1);    // drop, jump to statement if true
   }
-  optnl();                    // NOT posix or awk book; in OTA
+  optional_nl();                    // NOT posix or awk book; in OTA
   cgl.break_dest = zcode_last + 1;
   gen2cd(opjump, -1);
   cgl.continue_dest = zcode_last + 1;
@@ -1180,7 +1185,7 @@ static void for_stmt(void)
         cgl.break_dest = zcode_last + 1;
         gen2cd(opjump, -1);   // fill in with loc after stmt
       }
-      optnl();
+      optional_nl();
       // fixup stack if return or exit inside for (var in array)
       cgl.stack_offset_to_fix += 3;
       stmt();
@@ -1349,7 +1354,7 @@ static void action(int action_type)
   for (;;) {
     if (istok(tkeof))
       error_exit("(%d:) unexpected EOF\n", __LINE__);
-    optnlsemi();
+    optional_nl_or_semi();
     if (havetok(tkrbrace)) {
       break;
     }
@@ -1360,22 +1365,14 @@ static void action(int action_type)
     if (prev_was_terminated()) {
       continue;
     }
-A:
-    if (have_nl_semi()) {
-      scan();
-      continue;
+    if (!is_nl_semi() && !istok(tkrbrace)) {
+      xerr("syntax near '%s' -- newline, ';', or '}' expected\n", tokstr);
+      while (!is_nl_semi() && !istok(tkrbrace) && !istok(tkeof)) scan();
+      if (istok(tkeof)) error_exit("(%d:) unexpected EOF\n", __LINE__);
     }
-    if (havetok(tkrbrace)) {
-      break;
-    }
-    xerr("syntax near '%s' -- semicolon or newline expected\n", tokstr);
-
-    while (!istok(tkrbrace) && !istok(tksemi) && !istok(tknl) && !istok(tkeof))
-      scan();
-    if (istok(tkeof))
-      error_exit("(%d:) unexpected EOF\n", __LINE__);
-    goto A;
-
+    if (havetok(tkrbrace)) break;
+    // Must be semicolon or newline
+    scan();
   }
 }
 
@@ -1475,10 +1472,10 @@ EXTERN void compile(void)
   init_compiler();
   init_scanner();
   scan();
-  optnlsemi();        // Does posix allow NL or ; before first rule?
+  optional_nl_or_semi();        // Does posix allow NL or ; before first rule?
   while (! istok(tkeof)) {
     rule();
-    optnlsemi();        // NOT POSIX
+    optional_nl_or_semi();        // NOT POSIX
   }
 
   // TEMP FIXME put BEGIN and END together
