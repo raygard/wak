@@ -23,8 +23,10 @@
 #include <time.h>
 #include <locale.h>
 #include <assert.h>
+
 // for getopt():
 #include <unistd.h>
+#include <langinfo.h>
 #include <regex.h>
 
 #if defined(__unix__) || defined(linux)

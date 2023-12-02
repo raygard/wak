@@ -122,6 +122,15 @@ int main(int argc, char **argv, char **envp)
     }
     progstring = argv[optind++];
   }
+
+  // Toybox main.c does this, so do we.
+  // Try user's locale, but if that isn't UTF-8 merge in a UTF-8 locale's
+  // character type data. (Fall back to en_US for MacOS.)
+  setlocale(LC_CTYPE, "");
+  if (strcmp("UTF-8", nl_langinfo(CODESET)))
+    uselocale(newlocale(LC_CTYPE_MASK, "C.UTF-8", 0) ? :
+      newlocale(LC_CTYPE_MASK, "en_US.UTF-8", 0));
+
   awk(sepstring, num_assignments, assignments, num_progfiles, progfiles,
       progstring, optind, argc, argv, opt_test_scanner, opt_dump_symbols,
       opt_run_prog, envp);
