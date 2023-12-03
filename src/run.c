@@ -706,33 +706,6 @@ static FILE *setup_outfile(char *file_or_pipe, char *mode)
   return fp;
 }
 
-static regex_t rx_printf_pctpct;
-static regex_t rx_printf_nostars;
-static regex_t rx_printf_onestar;
-static regex_t rx_printf_twostars;
-static regex_t rx_printf_anystars;
-static regex_t rx_printf_any;
-
-static void init_printf_rx(void)
-{
-  rx_compile_or_die(&rx_printf_pctpct, "^[^%]*%%");
-  rx_compile_or_die(&rx_printf_nostars, "^[^%]*%[^*aAdiouxXfFeEgGcs%]*[aAdiouxXfFeEgGcs]");
-  rx_compile_or_die(&rx_printf_onestar, "^[^%]*%[^*aAdiouxXfFeEgGcs%]*[*][^*aAdiouxXfFeEgGcs%]*[aAdiouxXfFeEgGcs]");
-  rx_compile_or_die(&rx_printf_twostars, "^[^%]*%[^*aAdiouxXfFeEgGcs%]*[*][^*aAdiouxXfFeEgGcs%]*[*][^*aAdiouxXfFeEgGcs%]*[aAdiouxXfFeEgGcs]");
-  rx_compile_or_die(&rx_printf_anystars, "^[^%]*%[^aAdiouxXfFeEgGcs%]*[aAdiouxXfFeEgGcs]");
-  rx_compile_or_die(&rx_printf_any, "^[^%]*%(%|[^aAdiouxXfFeEgGcs%]*[aAdiouxXfFeEgGcs])");
-}
-
-static void free_print_rx(void)
-{
-  regfree(&rx_printf_pctpct);
-  regfree(&rx_printf_nostars);
-  regfree(&rx_printf_onestar);
-  regfree(&rx_printf_twostars);
-  regfree(&rx_printf_anystars);
-  regfree(&rx_printf_any);
-}
-
 static int getcnt(int k)
 {
   if (k >= stkptr) fatal("too few args for printf\n");
@@ -764,39 +737,43 @@ static int fsprintf(FILE *ignored, const char *fmt, ...)
 
 typedef int (*fvar_t)(FILE *, const char *, ...);
 
+static regex_t rx_printf_fmt;
+static char *printf_fmt_rx = "%[-+ #0]*([*]|[0-9]*)([.]([*]|[0-9]*))?[aAdiouxXfFeEgGcs%]";
+
 static void varprint(fvar_t fpvar, FILE *outfp, int nargs)
 {
-  int r, k, c, cnt1 = 0, cnt2 = 0;
+  int k, nn, nnc, fmtc, holdc, cnt1 = 0, cnt2 = 0;
+  double n = 0;
+  char *s;
+  regoff_t offs = -1, e = -1;
   val_to_str(&STACK[stkptr-nargs+1]);
   char *fmt = STACK[stkptr-nargs+1].vst->str;
-  regoff_t offs = -1, e = -1;
-  if (nargs == 1) {
-    if (!rx_find(&rx_printf_anystars, fmt, &offs, &e, 0))
-      fatal("printf needs args to print\n");
-    fpvar(outfp, fmt);
-    return;
-  }
   k = stkptr - nargs + 2;
   while (*fmt) {
-    if (rx_find(&rx_printf_any, fmt, &offs, &e, 0)) {
-      fpvar(outfp, fmt);    // No format chars found
-      break;
+    nn = strcspn(fmt, "%");
+    if (nn) {
+      holdc = fmt[nn];
+      fmt[nn] = 0;
+      fpvar(outfp, "%s", fmt);
+      fmt[nn] = holdc;
     }
-    r = 0;
-    if (!rx_find(&rx_printf_nostars, fmt, &offs, &e, 0)) r = 1;
-    else if (!rx_find(&rx_printf_onestar, fmt, &offs, &e, 0)) r = 2;
-    else if (!rx_find(&rx_printf_twostars, fmt, &offs, &e, 0)) r = 3;
-    else if (rx_find(&rx_printf_pctpct, fmt, &offs, &e, 0))
-      fatal("bad printf format\n");
-    char *pfmt = fmt, holdc = pfmt[e];
-    pfmt[e] = 0;
-    c = fmt[e-1];
-    fmt += e;
-    double n = 0;
-    char *s;
-    switch (r) {
+    fmt += nn;
+    if (!*fmt) break;
+    nnc = strcspn(fmt+1, "aAdiouxXfFeEgGcs%");
+    fmtc = fmt[nnc+1];
+    if (!fmtc) ffatal("bad printf format '%s'", fmt);
+    holdc = fmt[nnc+2];
+    fmt[nnc+2] = 0;
+    if (rx_find(&rx_printf_fmt, fmt, &offs, &e, 0))
+      ffatal("bad printf format <%s>\n", fmt);
+    int nargsneeded = 1;
+    for (char *p = strchr(fmt, '*'); p; p = strchr(p+1, '*'))
+      nargsneeded++;
+    nargsneeded -= fmtc == '%';
+    
+    switch (nargsneeded) {
       case 0:
-        fpvar(outfp, pfmt);
+        fpvar(outfp, fmt);
         break;
       case 3:
         cnt1 = getcnt(k++);
@@ -806,37 +783,41 @@ static void varprint(fvar_t fpvar, FILE *outfp, int nargs)
         ATTR_FALLTHROUGH_INTENDED;
       case 1:
         if (k > stkptr) fatal("not enough args for printf format\n");
-        if (c == 's') {
+        if (fmtc == 's') {
           val_to_str(&STACK[k]);
           s = STACK[k++].vst->str;
-        } else if (c == 'c' && !is_num(&STACK[k])) {
+        } else if (fmtc == 'c' && !is_num(&STACK[k])) {
           n = STACK[k++].vst ? STACK[k-1].vst->str[0] : '!';
         } else {
           val_to_num(&STACK[k]);
           n = STACK[k++].num;
         }
-        switch (r) {
+        switch (nargsneeded) {
           case 1:
-            if (c == 's') fpvar(outfp, pfmt, s);
-            else if (strchr("cdi", c)) fpvar(outfp, pfmt, (int)n);
-            else if (strchr("ouxX", c)) fpvar(outfp, pfmt, (unsigned)n);
-            else fpvar(outfp, pfmt, n);
+            if (fmtc == 's') fpvar(outfp, fmt, s);
+            else if (strchr("cdi", fmtc)) fpvar(outfp, fmt, (int)n);
+            else if (strchr("ouxX", fmtc)) fpvar(outfp, fmt, (unsigned)n);
+            else fpvar(outfp, fmt, n);
             break;
           case 2:
-            if (c == 's') fpvar(outfp, pfmt, cnt2, s);
-            else if (strchr("cdi", c)) fpvar(outfp, pfmt, cnt2, (int)n);
-            else if (strchr("ouxX", c)) fpvar(outfp, pfmt, cnt2, (unsigned)n);
-            else fpvar(outfp, pfmt, cnt2, n);
+            if (fmtc == 's') fpvar(outfp, fmt, cnt2, s);
+            else if (strchr("cdi", fmtc)) fpvar(outfp, fmt, cnt2, (int)n);
+            else if (strchr("ouxX", fmtc)) fpvar(outfp, fmt, cnt2, (unsigned)n);
+            else fpvar(outfp, fmt, cnt2, n);
             break;
           case 3:
-            if (c == 's') fpvar(outfp, pfmt, cnt1, cnt2, s);
-            else if (strchr("cdi", c)) fpvar(outfp, pfmt, cnt1, cnt2, (int)n);
-            else if (strchr("ouxX", c)) fpvar(outfp, pfmt, cnt1, cnt2, (unsigned)n);
-            else fpvar(outfp, pfmt, cnt1, cnt2, n);
+            if (fmtc == 's') fpvar(outfp, fmt, cnt1, cnt2, s);
+            else if (strchr("cdi", fmtc)) fpvar(outfp, fmt, cnt1, cnt2, (int)n);
+            else if (strchr("ouxX", fmtc)) fpvar(outfp, fmt, cnt1, cnt2, (unsigned)n);
+            else fpvar(outfp, fmt, cnt1, cnt2, n);
             break;
         }
+        break;
+      default:
+        fatal("bad printf format\n");
     }
-    pfmt[e] = holdc;
+    fmt += nnc + 2;
+    *fmt = holdc;
   }
 }
 
@@ -2066,8 +2047,8 @@ static void free_literal_regex(void)
 EXTERN void run(int optind, int argc, char **argv, char *sepstring, int num_assignments, char **assignments, char **envp)
 {
   init_globals(optind, argc, argv, sepstring, num_assignments, assignments, envp);
-  init_printf_rx();
   init_field_rx();
+  rx_compile_or_die(&rx_printf_fmt, printf_fmt_rx);
   setup_std_file("-", stdin, "r");
   setup_std_file("/dev/stdin", stdin, "r");
   setup_std_file("/dev/stdout", stdout, "w");
@@ -2078,8 +2059,8 @@ EXTERN void run(int optind, int argc, char **argv, char *sepstring, int num_assi
   if (r != tkexit)
     if (cgl.first_recrule) run_files(&status);
   if (cgl.first_end) r = interp(cgl.first_end, &status);
+  regfree(&rx_printf_fmt);
   free_field_rx();
-  free_print_rx();
   free_literal_regex();
   xfree(rgl.recbuf);
   xfree(rgl.recbuf_multiline);
