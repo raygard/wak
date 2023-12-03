@@ -56,7 +56,7 @@ static int awk(char *sepstring, int num_assignments, char **assignments,
       run(optind, argc, argv, sepstring, num_assignments, assignments, envp);
   }
 
-  return 0;
+  return cgl.compile_error_count;
 }
 
 EXTERN int trace_sw = 0;
@@ -131,9 +131,8 @@ int main(int argc, char **argv, char **envp)
     uselocale(newlocale(LC_CTYPE_MASK, "C.UTF-8", 0) ? :
       newlocale(LC_CTYPE_MASK, "en_US.UTF-8", 0));
 
-  awk(sepstring, num_assignments, assignments, num_progfiles, progfiles,
+  return awk(sepstring, num_assignments, assignments, num_progfiles, progfiles,
       progstring, optind, argc, argv, opt_test_scanner, opt_dump_symbols,
       opt_run_prog, envp);
-  return EXIT_SUCCESS;
 }
 #endif  // FOR_TOYBOX
