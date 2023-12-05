@@ -585,7 +585,7 @@ static zvalue *get_map_val(zvalue *v, zvalue *key)
 static zvalue *setup_lvalue(int n, int parmbase, int *field_num)
 {
   *field_num = -1;
-  zvalue *v = &STACK[n];
+  zvalue *v = &STACK[n], *vv = v;
   int k = v->num;
   if (v->flags & ZF_FIELDREF) {
     v = get_field_ref(*field_num = k);
@@ -593,7 +593,12 @@ static zvalue *setup_lvalue(int n, int parmbase, int *field_num)
     if (k == NF) *field_num = THIS_MEANS_SET_NF;
     if (k < 0) k = parmbase - k;    // loc of var on stack
     v = &STACK[k];
-    force_maybemap_to_map(v);
+    // Next line caused mem leaks and bad 'array in scalar context' errors
+    // force_maybemap_to_map(v);
+    // Next line caused ASAN errors; why?
+    // if (vv->flags & ZF_MAPREF) v->flags = ZF_MAP;
+    // Next line fixed the above errors.
+    if (vv->flags & ZF_MAPREF) force_maybemap_to_map(v);
     if (is_map(v)) {
       v = get_map_val(v, &STACK[n - 1]);
       swap();
