@@ -8,8 +8,6 @@
 //// main
 ////////////////////
 
-
-
 static void progfiles_init(char *progstring, char **progfiles,
     int num_progfiles)
 {
@@ -45,7 +43,6 @@ static int awk(char *sepstring, int num_assignments, char **assignments,
 (void)opt_test_scanner, (void)opt_dump_symbols;
 
   progfiles_init(progstring, progfiles, num_progfiles);
-
   compile();
 
   if (cgl.compile_error_count)
@@ -122,7 +119,7 @@ int main(int argc, char **argv, char **envp)
     }
     progstring = argv[optind++];
   }
-
+#if defined(__unix__) || defined(linux)
   // Toybox main.c does this, so do we.
   // Try user's locale, but if that isn't UTF-8 merge in a UTF-8 locale's
   // character type data. (Fall back to en_US for MacOS.)
@@ -130,6 +127,7 @@ int main(int argc, char **argv, char **envp)
   if (strcmp("UTF-8", nl_langinfo(CODESET)))
     uselocale(newlocale(LC_CTYPE_MASK, "C.UTF-8", 0) ? :
       newlocale(LC_CTYPE_MASK, "en_US.UTF-8", 0));
+#endif
 
   return awk(sepstring, num_assignments, assignments, num_progfiles, progfiles,
       progstring, optind, argc, argv, opt_test_scanner, opt_dump_symbols,

@@ -26,21 +26,18 @@
 
 // for getopt():
 #include <unistd.h>
-#include <langinfo.h>
 #include <regex.h>
-
 #if defined(__unix__) || defined(linux)
-    #define OS_Windows  0
-#elif   defined(_WIN32) || defined(_WIN64)
-    #define OS_Windows  1
-#else
-    #error Cannot determine platform or compiler support.
+#include <langinfo.h>
 #endif
 
 // __USE_MINGW_ANSI_STDIO will have MinGW use its own printf format system?
 // Because "The vc6.0 msvcrt.dll that MinGW-w64 targets doesn't implement
 // support for the ANSI standard format specifiers."
 // https://www.msys2.org/wiki/Porting/
+#if !(defined(__unix__) || defined(linux))
+#  define __USE_MINGW_ANSI_STDIO            1
+#endif
 
 #endif  // FOR_TOYBOX
 #ifdef __GNUC__
@@ -260,7 +257,6 @@ struct zmap {
 #define xerr(format, ...) zzerr(__FILE__, __LINE__, format, __VA_ARGS__)
 
 struct compiler_globals {
-  int in_print_expr;
   int in_print_stmt;
   int in_function_body;
   int pstate;
@@ -374,7 +370,6 @@ EXTERN void push_val(zvalue *v);
 EXTERN void zvalue_copy(zvalue *to, zvalue *from);
 EXTERN void init_scanner(void);
 EXTERN void scan(void);
-EXTERN void gencd(int op);
 EXTERN int find_global(char *s);
 EXTERN void compile(void);
 EXTERN int zstring_match(zstring *a, zstring *b);

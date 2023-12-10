@@ -95,8 +95,7 @@ static void zlist_expand(zlist *p)
   size_t offset = p->avail - p->base;
   size_t cap = p->limit - p->base;
   size_t newcap = MAX(cap + p->size, ((cap / p->size) * 3 / 2) * p->size);
-  if (newcap <= cap)
-    error_exit("bad memory request.\n");
+  if (newcap <= cap) error_exit("bad memory request.\n");
   char *base = xrealloc(p->base, newcap);
   p->base = base;
   p->limit = base + newcap;

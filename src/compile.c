@@ -10,11 +10,26 @@
 
 //  NOTES:
 //  NL ok after , { && || do else OR after right paren after if/while/for
+//  TODO: Better diags than 'unexpected EOF'
+//    see case tkgetline -- test more
+//    case tkmatchop, tknotmatch -- fix ~ (/re/)
+
+// Forward declarations -- for mutually recursive parsing functions
+static void exprn(int rbp);
+static void lvalue(void);
+static int primary(void);
+static void stmt(void);
+static void action(int action_type);
 
 #define curtok() (scs->tok)
-#define istok(toknum) (scs->tok == toknum)
+#define istok(toknum) (scs->tok == (toknum))
 
-
+static int havetok(int tk)
+{
+  if (curtok() != tk) return 0;
+  scan();
+  return 1;
+}
 
 
 //// code and "literal" emitters
@@ -24,7 +39,7 @@ static void gen2cd(int op, int n)
   zcode_last = zlist_append(&zcode, &n);
 }
 
-EXTERN void gencd(int op)
+static void gencd(int op)
 {
   zcode_last = zlist_append(&zcode, &op);
 }
@@ -40,8 +55,7 @@ static int make_literal_regex_val(char *s)
 {
   regex_t *rx;
   rx = xmalloc(sizeof(*rx));
-  if (rx_compile(rx, s))
-    xerr("regex seen as '%s'\n", s);
+  if (rx_compile(rx, s)) xerr("regex seen as '%s'\n", s);
   zvalue v = ZVINIT(ZF_RX, 0, 0);
   v.rx = rx;
   // Flag empty rx to make it easy to identify for split() special case
@@ -66,8 +80,7 @@ static int make_uninit_val(void)
 static int find_func_def_entry(char *s)
 {
   for (int k = 1; k < zlist_len(&func_def_table); k++)
-    if (!strcmp(s, FUNC_DEF[k].name))
-      return k;
+    if (!strcmp(s, FUNC_DEF[k].name)) return k;
   return 0;
 }
 
@@ -83,8 +96,7 @@ static int add_func_def_entry(char *s)
 EXTERN int find_global(char *s)
 {
   for (int k = 1; k < zlist_len(&globals_table); k++)
-    if (!strcmp(s, GLOBAL[k].name))
-      return k;
+    if (!strcmp(s, GLOBAL[k].name)) return k;
   return 0;
 }
 
@@ -100,8 +112,7 @@ static int add_global(char *s)
 static int find_local_entry(char *s)
 {
   for (int k = 1; k < zlist_len(&locals_table); k++)
-    if (!strcmp(s, LOCAL[k].name))
-      return k;
+    if (!strcmp(s, LOCAL[k].name)) return k;
   return 0;
 }
 
@@ -111,6 +122,25 @@ static int add_local_entry(char *s)
   ent.name = xstrdup(s);
   int slotnum = zlist_append(&locals_table, &ent);
   LOCAL[slotnum].slotnum = slotnum;
+  return slotnum;
+}
+
+static int find_or_add_var_name(void)
+{
+  int slotnum = 0;    // + means global; - means local to function
+  int globals_ent = 0;
+  int locals_ent = find_local_entry(tokstr);   // in local symbol table?
+  if (locals_ent) {
+    slotnum = -LOCAL[locals_ent].slotnum;
+  } else {
+    globals_ent = find_global(tokstr);
+    if (!globals_ent) globals_ent = add_global(tokstr);
+    slotnum = GLOBAL[globals_ent].slotnum;
+    if (find_func_def_entry(tokstr))
+      // POSIX: The same name shall not be used both as a variable name
+      // with global scope and as the name of a function.
+      xerr("var '%s' used as function name\n", tokstr);
+  }
   return slotnum;
 }
 
@@ -162,7 +192,8 @@ static void init_compiler(void)
 //// END Initialization
 
 //// Parsing and compiling to zcode
-static int nnlbp[] = {
+// Left binding powers
+static int lbp_table[] = {
   // tkunusedtoken, tkeof, tkerr, tknl,
   0, 0, 0, 0,
   // tkvar, tknumber, tkstring, tkregex, tkfunc, tkbuiltin,
@@ -210,22 +241,23 @@ static int getlbp(int tok)
   // FIXME: should tkappend be here too? is tkpipe needed?
   if (cgl.in_print_stmt && ! cgl.paren_level && (tok == tkgt || tok == tkpipe))
     return 0;
-  return (0 <= tok && tok <= tkin) ? nnlbp[tok] :
+  return (0 <= tok && tok <= tkin) ? lbp_table[tok] :
     // getline is special, not a normal builtin.
     // close, index, match, split, sub, gsub, sprintf, substr
     // are really builtin functions though bwk treats them as keywords.
     (tkgetline <= tok && tok <= tksubstr) ? 240 : 0;     // FIXME 240 is temp?
 }
 
+// Get right binding power. Same as left except for right associative optors
 static int getrbp(int tok)
 {
-  int rbp = getlbp(tok);
-  if (tok == tkpow || rbp < 70)   // power, ternary (?:), assignment ops
-    rbp--;                      // make right associative
-  return rbp;
+  int lbp = getlbp(tok);
+  // ternary (?:), assignment, power ops are right associative
+  return (lbp <= 60 || lbp == 170) ? lbp - 1 : lbp;
 }
 
-
+//// syntax error diagnostic and recovery (Turner's method)
+// TODO FIXME add ref for Turner's method?
 static int recovering = 0;
 
 static void complain(int tk, int lno)
@@ -234,8 +266,7 @@ static void complain(int tk, int lno)
     return;
   }
   recovering = 1;
-  if (strcmp(tokstr, "\n") == 0)
-    tokstr = "<newline>";
+  if (strcmp(tokstr, "\n") == 0) tokstr = "<newline>";
   if (tksemi <= tk && tk <= tkpipe) {
     char op[3];
     get_token_text(op, tk);
@@ -252,36 +283,25 @@ static void complain(int tk, int lno)
   }
 }
 
-static int havetok(int tk)
-{
-  if (curtok() != tk) return 0;
-  scan();
-  return 1;
-}
-
-static void skip_to(char *tklist)
-{
-  do scan(); while (!istok(tkeof) && !strchr(tklist, curtok()));
-  if (istok(tkeof))
-    error_exit("(%d:) unexpected EOF\n", __LINE__);
-}
-
 static void check_tk_with_recovery(int tk, int lno)
 {
   if (recovering) {
     while (!istok(tkeof) && !istok(tk))
       scan();
-    if (istok(tkeof))
-      error_exit("(%d:) unexpected EOF\n", __LINE__);
+    if (istok(tkeof)) error_exit("(%d:) unexpected EOF\n", __LINE__);
     scan(); // consume expected token
     recovering = 0;
-  } else {
-    if (!havetok(tk))
-      complain(tk, lno);
-  }
+  } else if (!havetok(tk)) complain(tk, lno);
+}
+
+static void skip_to(char *tklist)
+{
+  do scan(); while (!istok(tkeof) && !strchr(tklist, curtok()));
+  if (istok(tkeof)) error_exit("(%d:) unexpected EOF\n", __LINE__);
 }
 
 #define expect(tk) check_tk_with_recovery(tk, __LINE__)
+//// END syntax error diagnostic and recovery (Turner's method)
 
 static void optional_nl_or_semi(void)
 {
@@ -301,7 +321,6 @@ static void rparen(void)
   optional_nl();
 }
 
-
 static int have_comma(void)
 {
   if (!havetok(tkcomma)) return 0;
@@ -309,51 +328,48 @@ static int have_comma(void)
   return 1;
 }
 
-static char asgnops[] = {tkpowasgn, tkmodasgn, tkmulasgn, tkdivasgn, tkaddasgn,
-  tksubasgn, tkasgn, 0};
+static void check_set_map(int slotnum)
+{
+  // POSIX: The same name shall not be used within the same scope both as
+  // a scalar variable and as an array.
+  if (slotnum < 0 && LOCAL[-slotnum].flags & ZF_SCALAR)
+    xerr("scalar param '%s' used as array\n", LOCAL[-slotnum].name);
+  if (slotnum > 0 && GLOBAL[slotnum].flags & ZF_SCALAR)
+    xerr("scalar var '%s' used as array\n", GLOBAL[slotnum].name);
+  if (slotnum < 0) LOCAL[-slotnum].flags |= ZF_MAP;
+  if (slotnum > 0) GLOBAL[slotnum].flags |= ZF_MAP;
+}
 
+static void check_set_scalar(int slotnum)
+{
+  if (slotnum < 0 && LOCAL[-slotnum].flags & ZF_MAP)
+    xerr("array param '%s' used as scalar\n", LOCAL[-slotnum].name);
+  if (slotnum > 0 && GLOBAL[slotnum].flags & ZF_MAP)
+    xerr("array var '%s' used as scalar\n", GLOBAL[slotnum].name);
+  if (slotnum < 0) LOCAL[-slotnum].flags |= ZF_SCALAR;
+  if (slotnum > 0) GLOBAL[slotnum].flags |= ZF_SCALAR;
+}
 
-static void exprn(int rbp);
+static void map_name(void)
+{
+  int slotnum;
+  check_set_map(slotnum = find_or_add_var_name());
+  gen2cd(tkvar, slotnum);
+}
 
 static void expr(void)
 {
   exprn(0);
 }
 
-
-
-static int find_or_add_var_name(void)
-{
-  int slotnum = 0;    // + means global; - means local to function
-  int globals_ent = 0;
-  int locals_ent = find_local_entry(tokstr);   // in local symbol table?
-  if (locals_ent) {
-    slotnum = -LOCAL[locals_ent].slotnum;
-  } else {
-    globals_ent = find_global(tokstr);
-    if (!globals_ent) globals_ent = add_global(tokstr);
-    slotnum = GLOBAL[globals_ent].slotnum;
-    if (find_func_def_entry(tokstr))
-      // POSIX: The same name shall not be used both as a variable name
-      // with global scope and as the name of a function.
-      xerr("var '%s' used as function name\n", tokstr);
-  }
-  return slotnum;
-}
-
-static void lvalue(void); // forward references
-static void map_name(void);
-
-static char builtin_1_arg[] = { tkcos, tksin, tkexp, tklog, tksqrt, tkint,
-  tktolower, tktoupper, tkclose, tksystem, 0};
-
-static char builtin_2_arg[] = { tkatan2, tkmatch, tkindex, 0};
-
-static char builtin_2_3_arg[] = { tksub, tkgsub, tksplit, tksubstr, 0};
-static char builtin_0_1_arg[] = { tksrand, tklength, tkfflush, 0};
-
 static void check_builtin_arg_counts(int tk, int num_args, char *fname)
 {
+  static char builtin_1_arg[] = { tkcos, tksin, tkexp, tklog, tksqrt, tkint,
+                                  tktolower, tktoupper, tkclose, tksystem, 0};
+  static char builtin_2_arg[] = { tkatan2, tkmatch, tkindex, 0};
+  static char builtin_2_3_arg[] = { tksub, tkgsub, tksplit, tksubstr, 0};
+  static char builtin_0_1_arg[] = { tksrand, tklength, tkfflush, 0};
+
   if (tk == tkrand && num_args)
     xerr("function '%s' expected no args, got %d\n", fname, num_args);
   else if (strchr(builtin_1_arg, tk) && num_args != 1)
@@ -389,6 +405,7 @@ static void builtin_call(int tk, char *builtin_name)
       }
       num_args = 3;
       break;
+
     case tkmatch:
       expr();
       expect(tkcomma);
@@ -399,6 +416,7 @@ static void builtin_call(int tk, char *builtin_name)
       } else expr();
       num_args = 2;
       break;
+
     case tksplit:
       expr();
       expect(tkcomma);
@@ -420,6 +438,7 @@ static void builtin_call(int tk, char *builtin_name)
         num_args++;
       }
       break;
+
     case tklength:
       if (istok(tkvar) && (scs->ch == ',' || scs->ch == ')')) {
         gen2cd(tkvar, find_or_add_var_name());
@@ -427,6 +446,7 @@ static void builtin_call(int tk, char *builtin_name)
         num_args++;
       }
       ATTR_FALLTHROUGH_INTENDED;
+
     default:
       if (istok(tkrparen)) break;
       do {
@@ -454,23 +474,20 @@ static void function_call(void)
   //          the location slots will be chained from the symbol table
   int functk = 0, funcnum = 0;
   char builtin_name[16];  // be sure it's long enough for all builtins
-  if (scs->tok == tkbuiltin) {
+  if (istok(tkbuiltin)) {
     functk = scs->tokbuiltin;
     strcpy(builtin_name, tokstr);
-  } else if (scs->tok == tkfunc) { // user function
+  } else if (istok(tkfunc)) { // user function
     funcnum = find_func_def_entry(tokstr);
-    if (!funcnum)
-      funcnum = add_func_def_entry(tokstr);
+    if (!funcnum) funcnum = add_func_def_entry(tokstr);
     FUNC_DEF[funcnum].flags |= FUNC_CALLED;
     gen2cd(opprepcall, funcnum);
-  } else {
-    error_exit("bad function %s!", tokstr);
-  }
+  } else error_exit("bad function %s!", tokstr);
   scan();
-  // TODO FIXME: length() can appear without parens!
+  // length() can appear without parens
   int num_args = 0;
   if (functk == tklength && !istok(tklparen)) {
-    gen2cd(functk, 0);  // FIXME rdgrdg
+    gen2cd(functk, 0);
     return;
   }
   if (functk) {   // builtin
@@ -480,7 +497,6 @@ static void function_call(void)
   expect(tklparen);
   cgl.paren_level++;
   if (istok(tkrparen)) {
-    cgl.paren_level--;
     scan();
   } else {
     do {
@@ -493,38 +509,9 @@ static void function_call(void)
       num_args++;
     } while (have_comma());
     expect(tkrparen);
-    cgl.paren_level--;
   }
+  cgl.paren_level--;
   gen2cd(tkfunc, num_args);
-}
-
-static void check_set_map(int slotnum)
-{
-  // POSIX: The same name shall not be used within the same scope both as
-  // a scalar variable and as an array.
-  if (slotnum < 0 && LOCAL[-slotnum].flags & ZF_SCALAR)
-    xerr("scalar param '%s' used as array\n", LOCAL[-slotnum].name);
-  if (slotnum > 0 && GLOBAL[slotnum].flags & ZF_SCALAR)
-    xerr("scalar var '%s' used as array\n", GLOBAL[slotnum].name);
-  if (slotnum < 0) LOCAL[-slotnum].flags |= ZF_MAP;
-  if (slotnum > 0) GLOBAL[slotnum].flags |= ZF_MAP;
-}
-
-static void check_set_scalar(int slotnum)
-{
-  if (slotnum < 0 && LOCAL[-slotnum].flags & ZF_MAP)
-    xerr("array param '%s' used as scalar\n", LOCAL[-slotnum].name);
-  if (slotnum > 0 && GLOBAL[slotnum].flags & ZF_MAP)
-    xerr("array var '%s' used as scalar\n", GLOBAL[slotnum].name);
-  if (slotnum < 0) LOCAL[-slotnum].flags |= ZF_SCALAR;
-  if (slotnum > 0) GLOBAL[slotnum].flags |= ZF_SCALAR;
-}
-
-static void map_name(void)
-{
-  int slotnum;
-  check_set_map(slotnum = find_or_add_var_name());
-  gen2cd(tkvar, slotnum);
 }
 
 static void var(void)
@@ -580,27 +567,16 @@ static void var(void)
 // ray@radon:~$ awk 'BEGIN { $0 = "7 9 5 8"; k=2; print $+k^k }'
 // 8
 
-static int primary(void);
-
 static void field_op(void)
 {
   // curtok() must be $ here.
   expect(tkfield);
-  int tok = curtok();
   // tkvar, tknumber, tkstring, tkregex, tkfunc, tkbuiltin, tkfield, tkminus,
   // tkplus, tknot, tkincr, tkdecr, tklparen, tkgetline, tkclose, tkindex,
   // tkmatch, tksplit, tksub, tkgsub, tksprintf, tksubstr
-  switch (tok) {
-    case tkfield:
-      field_op();
-      break;
-    case tkvar:
-      var();
-      break;
-    default:
-      primary();
-      break;
-  }
+  if (istok(tkfield)) field_op();
+  else if (istok(tkvar)) var();
+  else primary();
   // tkfield op has "dummy" 2nd word so that convert_push_to_reference(void)
   // can find either tkfield or tkvar at same place (ZCODE[zcode_last-1]).
   gen2cd(tkfield, tkeof);
@@ -647,65 +623,53 @@ static void lvalue(void)
 
 static int primary(void)
 {
-  // return 1 if prim is lvalue, else 0
-  //
-  //   expr can start with:
-  //     tkvar, tknumber, tkstring, tkregex, tkfunc, tkbuiltin, tkfield, tkminus,
-  //     tkplus, tknot, tkincr, tkdecr, tklparen, tkgetline,
-  //     tkclose, tkindex, tkmatch, tksplit, tksub, tkgsub, tksprintf, tksubstr
-  //
-  //   bwk treats these as keywords, not builtins: close index match split sub gsub
-  //     sprintf substr
-  //
-  //   bwk builtins are: atan2 cos sin exp log sqrt int rand srand length tolower
-  //     toupper system fflush
-  //
-  //   NOTE: fflush() is NOT in POSIX awk
-  //
-  // On entry: prevtok has first symbol of expr, scs has binary or postfix op FIXME TODO not correct?
-  // or '[' (for subscript) or '(' (for function arg list).
-  // primary() will eat subscripts, function args, postfix ops.
-  // On entry: curtok() is first token of expression
-  // On exit: curtok() is infix operator (for binary_op() to handle) or next
+  //  On entry: curtok() is first token of expression
+  //  On exit: curtok() is infix operator (for binary_op() to handle) or next
   //   token after end of expression.
-  // On exit: scs should have a binary op or whatever follows expression.
-  // primary() must consume prefix and postfix operators as well as
-  // num, string, regex, var, var with subscripts, and function calls
-
-  // tkvar, tknumber, tkstring, tkregex, tkfunc, tkbuiltin, tkfield, tkminus,
-  // tkplus, tknot, tkincr, tkdecr, tklparen, tkgetline, tkclose, tkindex,
-  // tkmatch, tksplit, tksub, tkgsub, tksprintf, tksubstr
+  //  return -1 for field or var (potential lvalue);
+  //      2 or more for comma-separated expr list
+  //          as in "multiple subscript expression in array"
+  //          e.g. (1, 2) in array_name, or a print/printf list;
+  //      otherwise return 0
+  //
+  //  expr can start with:
+  //      tkvar, tknumber, tkstring, tkregex, tkfunc, tkbuiltin, tkfield, tkminus,
+  //      tkplus, tknot, tkincr, tkdecr, tklparen, tkgetline, tkclose, tkindex,
+  //      tkmatch, tksplit, tksub, tkgsub, tksprintf, tksubstr
+  //
+  //  bwk treats these as keywords, not builtins: close index match split sub gsub
+  //      sprintf substr
+  //
+  //  bwk builtins are: atan2 cos sin exp log sqrt int rand srand length tolower
+  //      toupper system fflush
+  //  NOTE: fflush() is NOT in POSIX awk
+  //
+  //  primary() must consume prefix and postfix operators as well as
+  //      num, string, regex, var, var with subscripts, and function calls
 
   int tok = curtok();
   switch (tok) {
-    case tkfield:
-      field_op();
-      if (istok(tkincr) || istok(tkdecr)) {
-        convert_push_to_reference();
-        gencd(curtok());
-        scan();
-      } else {
-        return -1;
-      }
-      break;
     case tkvar:
-      var();
+    case tkfield:
+      if (istok(tkvar)) var();
+      else field_op();
       if (istok(tkincr) || istok(tkdecr)) {
         convert_push_to_reference();
         gencd(curtok());
         scan();
-      } else {
-        return -1;
-      }
+      } else return -1;
       break;
+
     case tknumber:
       gen2cd(tknumber, make_literal_num_val(scs->numval));
       scan();
       break;
+
     case tkstring:
       gen2cd(tkstring, make_literal_str_val(tokstr));
       scan();
       break;
+
     case tkregex:
       // When an ERE token appears as an expression in any context other
       // than as the right-hand of the '~' or "!~" operator or as one of
@@ -715,60 +679,43 @@ static int primary(void)
       gen2cd(opmatchrec, make_literal_regex_val(tokstr));
       scan();
       break;
+
+    case tkbuiltin: // various builtins
     case tkfunc: // User-defined function
       function_call();
       break;
-    case tkbuiltin: // various builtins
-      function_call();
-      break;
 
-      // Unary prefix ! + -
+    // Unary prefix ! + -
     case tknot:
-      scan();
-      exprn(getlbp(tknot));
-      gencd(tknot);
-      break;
+    case tkminus:
     case tkplus:
       scan();
-      exprn(getlbp(tknot));   // same precedence; not same as infix tkplus
-      gencd(opnegate);      // FIXME TODO have explicit optonum ?
-      gencd(opnegate);
-      break;
-    case tkminus:
-      scan();
-      exprn(getlbp(tknot));   // same precedence; not same as infix tkminus
-      gencd(opnegate);
+      exprn(getlbp(tknot));   // unary +/- same precedence as !
+      if (tok == tknot) gencd(tknot);
+      else gencd(opnegate);
+      if (tok == tkplus) gencd(opnegate);
       break;
 
       // Unary prefix ++ -- MUST take lvalue
     case tkincr:
-      scan();
-      lvalue();
-      gencd(oppreincr);
-      break;
     case tkdecr:
       scan();
       lvalue();
-      gencd(oppredecr);
+      if (tok == tkincr) gencd(oppreincr);
+      else gencd(oppredecr);
       break;
 
     case tklparen:
       scan();
       cgl.paren_level++;
-      expr(); // TODO FIXME handle as in var ~ 360 ?
-      if (istok(tkcomma)) {
-        int num_subscripts = 1;
-        while (have_comma()) {
-          expr();
-          num_subscripts++;
-        }
-        expect(tkrparen);
-        cgl.paren_level--;
-        return num_subscripts;
-      } else {
-        expect(tkrparen);
-        cgl.paren_level--;
-      }
+      int num_exprs = 0;
+      do {
+        expr();
+        num_exprs++;
+      } while (have_comma());
+      expect(tkrparen);
+      cgl.paren_level--;
+      if (num_exprs > 1) return num_exprs;
       break;
 
     case tkgetline:
@@ -792,6 +739,7 @@ static int primary(void)
       gen2cd(tkgetline, nargs);
       gencd(modifier);
       break;
+
     default:
       xerr("syntax near '%s'\n", tokstr[0] == '\n' ? "\\n" : tokstr);
       skip_to(stmtendsy);
@@ -803,15 +751,13 @@ static int primary(void)
 static void binary_op(int optor)  // Also for ternary ?: optor.
 {
   int rbp = getrbp(optor);
-  if (optor != tkcat)
-    scan();
+  if (optor != tkcat) scan();
   // curtok() holds first token of right operand.
-  int cdx = 0;
+  int cdx = 0;  // index in zcode list
   switch (optor) {
     case tkin:
       // right side of 'in' must be (only) an array name
       map_name();
-      ////rdg TODO gencd(tkin,
       gencd(tkin);
       scan();
       // FIXME TODO 20230109 x = y in a && 2 works OK?
@@ -878,22 +824,22 @@ static int cat_start_concated_expr(int tok)
   return !! strchr(exprstarttermsy, tok) || tok >= tkgetline;
 }
 
+// TODO maybe move asgnops table into exprn()
+static char asgnops[] = {tkpowasgn, tkmodasgn, tkmulasgn, tkdivasgn, tkaddasgn,
+  tksubasgn, tkasgn, 0};
+
 static void exprn(int rbp)
 {
   // On entry: scs has first symbol of expression, e.g. var, number, string,
   // regex, func, getline, left paren, prefix op ($ ++ -- ! unary + or -) etc.
   static int lev;
   lev++;
-  int opnd_st = -2;
-  if (lev == 1 && cgl.pstate < 0) {
-    opnd_st = primary();
-    if (opnd_st > 0 && strchr(printexprendsy, curtok())) {
+  int opnd_st = primary();
+  if (lev == 1 && cgl.pstate < 0
+          && opnd_st > 0 && strchr(printexprendsy, curtok())) {
       cgl.pstate = opnd_st;
       lev--;
       return;
-    }
-  } else {
-    opnd_st = primary();
   }
 
   // mult_expr_list in parens must be followed by 'in' unless it
@@ -949,12 +895,9 @@ static void print_stmt(int tk)
     if (cgl.pstate > 0) {
       num_exprs = cgl.pstate;
     } else {
-      num_exprs++;
       cgl.pstate = 0;
-      while (have_comma()) {
+      for (num_exprs++; have_comma(); num_exprs++)
         expr();
-        num_exprs++;
-      }
     }
   }
   int outmode = curtok();
@@ -1009,10 +952,12 @@ static void simple_stmt(void)
       // TODO print or printf
       print_stmt(curtok());
       break;
+
     case tkdelete:
       // TODO delete
       delete_stmt();
       break;
+
     default:
       // FIXME error recovery needed! see testbad.awk
       xerr("syntax near '%s'\n", tokstr[0] == '\n' ? "\\n" : tokstr);
@@ -1029,8 +974,6 @@ static int is_nl_semi(void)
 {
   return istok(tknl) || istok(tksemi);
 }
-
-static void stmt(void); // Forward declaration!
 
 static void if_stmt(void)
 {
@@ -1138,8 +1081,7 @@ static void for_not_map_iter(void)
   cgl.break_dest = zcode_last + 1;
   gen2cd(opjump, -1);
   cgl.continue_dest = zcode_last + 1;
-  if (!istok(tkrparen))
-    simple_stmt();  // "increment"
+  if (!istok(tkrparen)) simple_stmt();  // "increment"
   gen2cd(opjump, condition_loc - zcode_last - 3);
   rparen();
   ZCODE[cgl.break_dest - 1] = zcode_last - cgl.break_dest + 1;
@@ -1200,37 +1142,39 @@ static void for_stmt(void)
   restore_break_continue(&brk, &cont);
 }
 
-static void action(int action_type);
-
 static void stmt(void)
 {
   switch (curtok()) {
     case tkeof:
       break;     // FIXME ERROR?
+
     case tkbreak:
       scan();
-      if (cgl.break_dest)
-        gen2cd(tkbreak, cgl.break_dest - zcode_last - 3);
+      if (cgl.break_dest) gen2cd(tkbreak, cgl.break_dest - zcode_last - 3);
       else xerr("%s", "break not in a loop\n");
       break;
+
     case tkcontinue:
       scan();
       if (cgl.continue_dest)
         gen2cd(tkcontinue, cgl.continue_dest - zcode_last - 3);
       else xerr("%s", "continue not in a loop\n");
       break;
+
     case tknext:
       scan();
       gencd(tknext);
       if (cgl.rule_type) xerr("%s", "next inside BEGIN or END\n");
       if (cgl.in_function_body) xerr("%s", "next inside function def\n");
       break;
+
     case tknextfile:
       scan();
       gencd(tknextfile);
       if (cgl.rule_type) xerr("%s", "nextfile inside BEGIN or END\n");
       if (cgl.in_function_body) xerr("%s", "nextfile inside function def\n");
       break;
+
     case tkexit:
       scan();
       if (strchr(exprstartsy, curtok())) {
@@ -1238,6 +1182,7 @@ static void stmt(void)
       } else gen2cd(tknumber, make_literal_num_val(NO_EXIT_STATUS));
       gencd(tkexit);
       break;
+
     case tkreturn:
       scan();
       if (cgl.stack_offset_to_fix) gen2cd(opdrop_n, cgl.stack_offset_to_fix);
@@ -1247,21 +1192,27 @@ static void stmt(void)
       gen2cd(tkreturn, cgl.nparms);
       if (!cgl.in_function_body) xerr("%s", "return not in function\n");
       break;
+
     case tklbrace:
       action(tklbrace);
       break;
+
     case tkif:
       if_stmt();
       break;
+
     case tkwhile:
       while_stmt();
       break;
+
     case tkdo:
       do_stmt();
       break;
+
     case tkfor:
       for_stmt();
       break;
+
     case tksemi:
       scan();
       break;
@@ -1272,10 +1223,8 @@ static void stmt(void)
 
 static void add_param(int funcnum, char *s)
 {
-  if (!find_local_entry(s))
-    add_local_entry(s);
-  else
-    xerr("function '%s' dup param '%s'\n", FUNC_DEF[funcnum].name, s);
+  if (!find_local_entry(s)) add_local_entry(s);
+  else xerr("function '%s' dup param '%s'\n", FUNC_DEF[funcnum].name, s);
   cgl.nparms++;
 
   // POSIX: The same name shall not be used as both a function parameter name
@@ -1310,10 +1259,8 @@ static void function_def(void)
   FUNC_DEF[funcnum].zcode_addr = zcode_last - 1;
   cgl.funcnum = funcnum;
   cgl.nparms = 0;
-  if (istok(tkfunc))
-    expect(tkfunc); // func name with no space before (
-  else
-    expect(tkvar);  // func name with space before (
+  if (istok(tkfunc)) expect(tkfunc); // func name with no space before (
+  else expect(tkvar);  // func name with space before (
   expect(tklparen);
   if (istok(tkvar)) {
     add_param(funcnum, tokstr);
@@ -1352,8 +1299,7 @@ static void action(int action_type)
   // Should have lbrace on entry.
   expect(tklbrace);
   for (;;) {
-    if (istok(tkeof))
-      error_exit("(%d:) unexpected EOF\n", __LINE__);
+    if (istok(tkeof)) error_exit("(%d:) unexpected EOF\n", __LINE__);
     optional_nl_or_semi();
     if (havetok(tkrbrace)) {
       break;
@@ -1362,9 +1308,7 @@ static void action(int action_type)
     // stmt() is normally unterminated here, but may be terminated if we
     // have if with no else (had to consume terminator looking for else)
     //   !!!   if (istok(tkrbrace) || prev_was_terminated())
-    if (prev_was_terminated()) {
-      continue;
-    }
+    if (prev_was_terminated()) continue;
     if (!is_nl_semi() && !istok(tkrbrace)) {
       xerr("syntax near '%s' -- newline, ';', or '}' expected\n", tokstr);
       while (!is_nl_semi() && !istok(tkrbrace) && !istok(tkeof)) scan();
@@ -1390,8 +1334,7 @@ static void rule(void)
   switch (curtok()) {
     case tkbegin:
       scan();
-      if (cgl.last_begin)
-        ZCODE[cgl.last_begin] = zcode_last - cgl.last_begin;
+      if (cgl.last_begin) ZCODE[cgl.last_begin] = zcode_last - cgl.last_begin;
       else cgl.first_begin = zcode_last + 1;
 
       cgl.rule_type = tkbegin;
@@ -1400,10 +1343,10 @@ static void rule(void)
       gen2cd(opjump, -1);
       cgl.last_begin = zcode_last;
       break;
+
     case tkend:
       scan();
-      if (cgl.last_end)
-        ZCODE[cgl.last_end] = zcode_last - cgl.last_end;
+      if (cgl.last_end) ZCODE[cgl.last_end] = zcode_last - cgl.last_end;
       else cgl.first_end = zcode_last + 1;
 
       cgl.rule_type = tkbegin;
@@ -1412,6 +1355,7 @@ static void rule(void)
       gen2cd(opjump, -1);
       cgl.last_end = zcode_last;
       break;
+
     case tklbrace:
       if (cgl.last_recrule)
         ZCODE[cgl.last_recrule] = zcode_last - cgl.last_recrule;
@@ -1420,6 +1364,7 @@ static void rule(void)
       gen2cd(opjump, -1);
       cgl.last_recrule = zcode_last;
       break;
+
     case tkfunction:
       function_def();
       break;

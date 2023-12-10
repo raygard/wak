@@ -25,10 +25,8 @@ static void progfile_open(void)
 {
   scs->filename = scs->progfiles[scs->cur_progfile];
   scs->fp = stdin;
-  if (strcmp(scs->filename, "-"))
-    scs->fp = fopen(scs->filename, "r");
-  if (!scs->fp)
-    error_exit("Can't open %s.\n", scs->filename);
+  if (strcmp(scs->filename, "-")) scs->fp = fopen(scs->filename, "r");
+  if (!scs->fp) error_exit("Can't open %s.\n", scs->filename);
   scs->line_num = 0;
 }
 
@@ -107,13 +105,11 @@ static int find_keyword_or_builtin(char *table,
   char s[16] = " ", *p;
   // keywords and builtin functions are spaced 10 apart for strstr() lookup,
   // so must be less than that long.
-  if (scs->toklen >= 10)
-    return 0;
+  if (scs->toklen >= 10) return 0;
   strcat(s, scs->tokstr);
   strcat(s, " ");
   p = strstr(table, s);
-  if (!p)
-    return 0;
+  if (!p) return 0;
   return first_tok_in_table + (p - table) / 10;
 }
 
@@ -125,8 +121,7 @@ static int find_token(void)
   strcat(s, scs->tokstr);
   strcat(s, " ");
   p = strstr(ops, s);
-  if (!p)
-    return 0;
+  if (!p) return 0;
   return tksemi + (p - ops) / 3;
 }
 
@@ -344,8 +339,7 @@ static void ascan_opt_div(int div_op_allowed_here)
       scs->tokstr[scs->toklen] = 0;
     }
     scs->tok = find_token();
-    if (scs->tok)
-      return;
+    if (scs->tok) return;
     scs->toktype = ERROR;
     scs->tok = tkerr;
     scs->error = 4;
@@ -390,10 +384,8 @@ EXTERN int prevtok = tkeof; // For checking end of prev statement for terminatio
 EXTERN void scan(void)
 {
   prevtok = scs->tok;
-  if (prevtok && strchr(div_preceders, prevtok))
-    scan_div_ok();
-  else
-    scan_regex_ok();
+  if (prevtok && strchr(div_preceders, prevtok)) scan_div_ok();
+  else scan_regex_ok();
   prevscstok = scs->tok;
   tokstr = scs->tokstr;
 }

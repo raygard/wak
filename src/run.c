@@ -277,12 +277,10 @@ static int splitter(fsetter_t setter, zmap *m, char *s, zvalue *zvfs)
     // is zero and FS is found and FS is ' ' (rx_default "[ \t]+"),
     // then the find is the leading or trailing spaces and/or tabs.
     // If so, skip this (empty) field, otherwise set field, length is offs.
-    if (offs || r || rx != &rx_default)
-      setter(m, ++nf, s, offs);
+    if (offs || r || rx != &rx_default) setter(m, ++nf, s, offs);
     s += end;
   }
-  if (!r && rx != &rx_default)
-    setter(m, ++nf, "", 0);
+  if (!r && rx != &rx_default) setter(m, ++nf, "", 0);
   return nf;
 }
 
@@ -326,8 +324,7 @@ static void rebuild_field0(void)
 // Called by run:setup_lvalue()
 static zvalue *get_field_ref(int fnum)
 {
-  if (fnum < 0 || fnum > FIELDS_MAX)
-    error_exit("bad field num %d\n", fnum);
+  if (fnum < 0 || fnum > FIELDS_MAX) error_exit("bad field num %d\n", fnum);
   if (fnum > nf_internal) {
     // Ensure fields list is large enough for fnum
     // Need len of fields to be > fnum b/c e.g. fnum==1 implies 2 fields
@@ -384,8 +381,7 @@ static void fixup_fields(int fnum)
 // Called by tkfield op in run    // TODO inline it in run?
 static void push_field(int fnum)
 {
-  if (fnum < 0 || fnum > FIELDS_MAX)
-    error_exit("bad field num %d\n", fnum);
+  if (fnum < 0 || fnum > FIELDS_MAX) error_exit("bad field num %d\n", fnum);
   // Contrary to posix, awk evaluates fields beyond $NF as empty strings.
   if (fnum > nf_internal) push_val(&uninit_string_zvalue);
   else push_val(&FIELD[fnum]);
@@ -667,8 +663,8 @@ static int close_file(void)
       if (!zof->fp || (zof->file_or_pipe == 'f' ? fclose : pclose)(zof->fp) < 0)
         return -1;  // otherwise assume successful close
       if (k < std_file_cnt) return 0;
-      if (k < --file_cnt)  // close hole in table if not last slot
-        files[k] = files[file_cnt];
+      // close hole in table if not last slot
+      if (k < --file_cnt) files[k] = files[file_cnt];
       return 0;
     }
   }
@@ -869,8 +865,7 @@ static int assign_global(char *var, char *value)
   int globals_ent = find_global(var);
   if (globals_ent) {
     zvalue *v = &STACK[globals_ent];
-    if (is_map(v))
-      error_exit("-v assignment to array\n");   // Maybe not needed?
+    if (is_map(v)) error_exit("-v assignment to array\n");  // Maybe not needed?
     zvalue_release_zstring(v);
     value = xstrdup(value);
     *v = new_str_val(escape_str(value));
@@ -1114,8 +1109,7 @@ static void gsub(int opcode, int nargs, int parmbase)
     v->vst = z;
   }
   rx_zvalue_free(rxp, ere);
-  if (!is_rx(STKP-2))
-    zstring_release(&STKP[-2].vst);
+  if (!is_rx(STKP-2)) zstring_release(&STKP[-2].vst);
   drop_n(3);
   push_int_val(nhits);
   if (field_num >= 0) fixup_fields(field_num);
@@ -1249,11 +1243,11 @@ static int interpx(int start, int *status)
       case tkgt:          // FALLTHROUGH intentional here
       case tkge:
         ; int cmp = 31416;
-        if (
-            (is_num(&STKP[-1]) && (STKP[0].flags & (ZF_NUM | ZF_NUMSTR) || !STKP[0].flags))
-            ||
-            (is_num(&STKP[0]) && (STKP[-1].flags & (ZF_NUM | ZF_NUMSTR) || !STKP[-1].flags))
-           ) {
+        
+        if (  (is_num(&STKP[-1]) &&
+              (STKP[0].flags & (ZF_NUM | ZF_NUMSTR) || !STKP[0].flags)) ||
+              (is_num(&STKP[0]) &&
+              (STKP[-1].flags & (ZF_NUM | ZF_NUMSTR) || !STKP[-1].flags))) {
           switch (opcode) {
             case tklt:
               cmp = STKP[-1].num < STKP[0].num;
