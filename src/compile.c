@@ -185,7 +185,8 @@ static void init_compiler(void)
 {
   init_tables();
   for (int k = 0; spec_vars[k]; k++) {
-    spec_var_limit = add_global(spec_vars[k]) + 1;
+    spec_var_limit = add_global(spec_vars[k]);
+    GLOBAL[spec_var_limit++].flags |= (k == 1 || k == 3) ? ZF_MAP : ZF_SCALAR;
     push_val(&uninit_zvalue);
   }
 }
