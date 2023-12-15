@@ -904,9 +904,12 @@ static char *nextfilearg(void)
     zvalue *v = &STACK[ARGV];
     zvalue zkey = ZVINIT(ZF_STR, 0,
         num_to_zstring(rgl.narg, val_to_str(&STACK[CONVFMT])->vst->str));
-    zvalue_copy(&rgl.cur_arg, val_to_str(get_map_val(v, &zkey)));
+    arg = "";
+    if (zmap_find(v->map, zkey.vst)) {
+      zvalue_copy(&rgl.cur_arg, val_to_str(get_map_val(v, &zkey)));
+      arg = rgl.cur_arg.vst->str;
+    }
     zvalue_release_zstring(&zkey);
-    arg = rgl.cur_arg.vst->str;
   } while (!*arg || assignment_arg(arg));
   rgl.nfiles++;
   return arg;
