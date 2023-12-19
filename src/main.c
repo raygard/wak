@@ -75,6 +75,8 @@ int main(int argc, char **argv, char **envp)
       "-r do not run, just compile\n"
       "-p print source\n"
   };
+  char pbuf[pbufsize];
+  TT.pbuf = pbuf;
   TT.progname = argv[0];
   char *sepstring = " ";
   // FIXME Need check on these, or use dynamic mem.

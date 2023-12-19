@@ -21,16 +21,13 @@ static void check_numeric_string(struct zvalue *v)
   }
 }
 
-enum {pbufsize = 512};
-static char pbuf[pbufsize];
-
 static struct zstring *num_to_zstring(double n, char *fmt)
 {
   int k;
-  if (n == (long long)n) k = snprintf(pbuf, pbufsize, "%lld", (long long)n);
-  else k = snprintf(pbuf, pbufsize, fmt, n);
+  if (n == (long long)n) k = snprintf(TT.pbuf, pbufsize, "%lld", (long long)n);
+  else k = snprintf(TT.pbuf, pbufsize, fmt, n);
   if (k < 0 || k >= pbufsize) ffatal("error encoding %f via '%s'", n, fmt);
-  return new_zstring(pbuf, k);
+  return new_zstring(TT.pbuf, k);
 }
 
 ////////////////////

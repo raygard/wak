@@ -61,6 +61,8 @@
 ////   declarations
 ////////////////////
 
+#define pbufsize  512 // For num_to_zstring()
+
 #ifndef FOR_TOYBOX
 struct scanner_state {
     char *p;
@@ -168,6 +170,7 @@ struct global_data {
 
   struct runtime_globals rgl;
 
+  char *pbuf;   // Used for number formatting in num_to_zstring()
   regex_t rx_default;
   regex_t rx_last;
   regex_t rx_multiline;
