@@ -1,5 +1,6 @@
 // common.c
-// Copyright 2023 Ray Gardner
+// Copyright 2024 Ray Gardner
+// License: 0BSD
 // vi: tabstop=2 softtabstop=2 shiftwidth=2
 
 #include "common.h"
@@ -7,15 +8,11 @@
 ////////////////////
 //// common defs
 ////////////////////
+#ifndef FOR_TOYBOX
 
-EXTERN struct zlist globals_table;  // global symbol table
-EXTERN struct zlist locals_table;  // local symbol table
-EXTERN struct zlist func_def_table;  // function symbol table
-
-EXTERN struct zlist literals;
-EXTERN struct zlist fields;
-EXTERN struct zlist zcode;
-EXTERN struct zlist stack;
+// Global data
+EXTERN struct global_data TT;
+#endif  // FOR_TOYBOX
 
 EXTERN char *ops = " ;  ,  [  ]  (  )  {  }  $  ++ -- ^  !  *  /  %  +  -  .. "
         "<  <= != == >  >= ~  !~ && || ?  :  ^= %= *= /= += -= =  >> |  ";
@@ -30,20 +27,13 @@ EXTERN char *builtins = " atan2     cos       sin       exp       log       "
     "close     index     match     split     "
     "sub       gsub      sprintf   substr    ";
 
-EXTERN char *progname;
-EXTERN struct compiler_globals cgl;
-// Some global variables:
-EXTERN int spec_var_limit = 0; // used in compile.h and run.h
-EXTERN int stkptr = 0;         // used in run.h and (once) in compile.h (& dumputils.h)
-EXTERN int zcode_last = 0;     // used in common.h and compile.h
-// END global variables
 
 EXTERN void zzerr(char *fn, int lnum, char *format, ...)
 {
   va_list args;
-  cgl.compile_error_count++;
+  TT.cgl.compile_error_count++;
   (void)fn; (void)lnum;
-  fprintf(stderr, "%s: file %s line %d: ", progname, scs->filename, scs->line_num);
+  fprintf(stderr, "%s: file %s line %d: ", TT.progname, TT.scs->filename, TT.scs->line_num);
   va_start(args, format);
   vfprintf(stderr, format, args);
   va_end(args);
@@ -55,11 +45,11 @@ EXTERN void zzfatal(char *fn, int lnum, char *format, ...)
 {
   va_list args;
   (void)fn; (void)lnum;
-  fprintf(stderr, "%s: file %s line %d: ", progname, scs->filename, scs->line_num);
+  fprintf(stderr, "%s: file %s line %d: ", TT.progname, TT.scs->filename, TT.scs->line_num);
   va_start(args, format);
   vfprintf(stderr, format, args);
   va_end(args);
-  fprintf(stderr, "%s: exit on fatal error\n", progname);
+  fprintf(stderr, "%s: exit on fatal error\n", TT.progname);
   fflush(stderr);
   exit(42);
 }
@@ -239,7 +229,7 @@ static size_t zlist_append_zvalue(struct zlist *p, struct zvalue *v)
 EXTERN void push_val(struct zvalue *v)
 {
   if (is_str(v)) zstring_incr_refcnt(v->vst);
-  stkptr = zlist_append_zvalue(&stack, v);
+  TT.stkptr = zlist_append_zvalue(&TT.stack, v);
 }
 
 EXTERN void zvalue_copy(struct zvalue *to, struct zvalue *from)

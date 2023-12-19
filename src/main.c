@@ -1,5 +1,6 @@
 // main.c
-// Copyright 2023 Ray Gardner
+// Copyright 2024 Ray Gardner
+// License: 0BSD
 // vi: tabstop=2 softtabstop=2 shiftwidth=2
 
 #include "common.h"
@@ -12,27 +13,27 @@ static void progfiles_init(char *progstring, char **progfiles,
     int num_progfiles)
 {
 
-  scs->p = progstring ? progstring : "  " + 2;
-  scs->progstring = progstring;
-  scs->num_progfiles = num_progfiles;
-  scs->progfiles = progfiles;
-  scs->cur_progfile = 0;
-  scs->filename = "(None)";  // Not needed...
-  scs->line = 0;      // for getline()
-  scs->line_size = 0; // for getline()
-  scs->line_num = 0;  // Not needed...
-  scs->fp = 0;        // For get_char() initial state.
+  TT.scs->p = progstring ? progstring : "  " + 2;
+  TT.scs->progstring = progstring;
+  TT.scs->num_progfiles = num_progfiles;
+  TT.scs->progfiles = progfiles;
+  TT.scs->cur_progfile = 0;
+  TT.scs->filename = "(None)";  // Not needed...
+  TT.scs->line = 0;      // for getline()
+  TT.scs->line_size = 0; // for getline()
+  TT.scs->line_num = 0;  // Not needed...
+  TT.scs->fp = 0;        // For get_char() initial state.
 
-  scs->tok = 0;
-  scs->tokbuiltin = 0;
-  scs->toktype = 0;
-  scs->maxtok = 256;
-  scs->tokstr = xzalloc(scs->maxtok);
-  scs->toklen = 0;        // Needed?
-  scs->ch = 0;        // Needed?
+  TT.scs->tok = 0;
+  TT.scs->tokbuiltin = 0;
+  TT.scs->toktype = 0;
+  TT.scs->maxtok = 256;
+  TT.scs->tokstr = xzalloc(TT.scs->maxtok);
+  TT.scs->toklen = 0;        // Needed?
+  TT.scs->ch = 0;        // Needed?
 
-  scs->numval = 0;
-  scs->error = 0;
+  TT.scs->numval = 0;
+  TT.scs->error = 0;
 }
 
 static int awk(char *sepstring, int num_assignments, char **assignments,
@@ -41,19 +42,21 @@ static int awk(char *sepstring, int num_assignments, char **assignments,
     int opt_run_prog, char **envp)
 {
 (void)opt_test_scanner, (void)opt_dump_symbols;
+  struct scanner_state ss = {0};
+  TT.scs = &ss;
 
   progfiles_init(progstring, progfiles, num_progfiles);
   compile();
 
-  if (cgl.compile_error_count)
-    fprintf(stderr, "Compile ended with %d error%s.\n", cgl.compile_error_count,
-        cgl.compile_error_count == 1 ? "" : "s");
+  if (TT.cgl.compile_error_count)
+    fprintf(stderr, "Compile ended with %d error%s.\n", TT.cgl.compile_error_count,
+        TT.cgl.compile_error_count == 1 ? "" : "s");
   else {
     if (opt_run_prog)
       run(optind, argc, argv, sepstring, num_assignments, assignments, envp);
   }
 
-  return cgl.compile_error_count;
+  return TT.cgl.compile_error_count;
 }
 
 EXTERN int trace_sw = 0;
@@ -72,7 +75,7 @@ int main(int argc, char **argv, char **envp)
       "-r do not run, just compile\n"
       "-p print source\n"
   };
-  progname = argv[0];
+  TT.progname = argv[0];
   char *sepstring = " ";
   // FIXME Need check on these, or use dynamic mem.
   int num_assignments = 0, num_progfiles = 0;
@@ -98,9 +101,6 @@ int main(int argc, char **argv, char **envp)
       case 'V':
         printf("<%s %s>\n", __DATE__, __TIME__);
         exit(0);
-        break;
-      case 'p':
-        opt_print_source = 1;
         break;
       case 'r':
         opt_run_prog = 0;

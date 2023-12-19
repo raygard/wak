@@ -1,5 +1,6 @@
 // lib.c
-// Copyright 2023 Ray Gardner
+// Copyright 2024 Ray Gardner
+// License: 0BSD
 // vi: tabstop=2 softtabstop=2 shiftwidth=2
 
 #include "common.h"

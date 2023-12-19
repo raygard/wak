@@ -1,5 +1,6 @@
 // run.c
-// Copyright 2023 Ray Gardner
+// Copyright 2024 Ray Gardner
+// License: 0BSD
 // vi: tabstop=2 softtabstop=2 shiftwidth=2
 
 #include "common.h"
@@ -150,31 +151,23 @@ static int rx_find_FS(regex_t *rx, char *s, regoff_t *start, regoff_t *end, int 
 ////   fields
 ////////////////////
 
-// Need more for toybox awk test
-#define FIELDS_MAX  102400
+#define FIELDS_MAX  102400 // Was 1024; need more for toybox awk test
 #define THIS_MEANS_SET_NF 999999999
-
-#define FS_MAX  128
-static regex_t rx_default;
-static regex_t rx_last;
-static regex_t rx_multiline;
-static char fs_last[FS_MAX] = "";
-static char one_char_fs[4];
 
 // Called by run:run()
 static void init_field_rx(void)
 {
-  rx_compile_or_die(&rx_default, "[ \t\n]+");
-  rx_compile_or_die(&rx_last, "[ \t\n]+"); // FIXME TODO what if empty ""
-  rx_compile_or_die(&rx_multiline, "[ \t]+");
+  rx_compile_or_die(&TT.rx_default, "[ \t\n]+");
+  rx_compile_or_die(&TT.rx_last, "[ \t\n]+"); // FIXME TODO what if empty ""
+  rx_compile_or_die(&TT.rx_multiline, "[ \t]+");
 }
 
 // Called by run:run()
 static void free_field_rx(void)
 {
-  regfree(&rx_default);
-  regfree(&rx_last);
-  regfree(&rx_multiline);
+  regfree(&TT.rx_default);
+  regfree(&TT.rx_last);
+  regfree(&TT.rx_multiline);
 }
 
 static int get_int_val(struct zvalue *v)
@@ -187,19 +180,19 @@ static int get_int_val(struct zvalue *v)
 static char *fmt_one_char_fs(char *fs)
 {
   if (strlen(fs) != 1) return fs;
-  snprintf(one_char_fs, sizeof(one_char_fs), "[%c]", fs[0]);
-  return one_char_fs;
+  snprintf(TT.one_char_fs, sizeof(TT.one_char_fs), "[%c]", fs[0]);
+  return TT.one_char_fs;
 }
 
 static regex_t *rx_prep(char *fs)
 {
-  if (!strcmp(fs, " ")) return &rx_default;
-  if (!strcmp(fs, fs_last)) return &rx_last;
+  if (!strcmp(fs, " ")) return &TT.rx_default;
+  if (!strcmp(fs, TT.fs_last)) return &TT.rx_last;
   if (strlen(fs) >= FS_MAX) fatal("FS too long");
-  strcpy(fs_last, fs);
-  regfree(&rx_last);
-  rx_compile_or_die(&rx_last, fmt_one_char_fs(fs));
-  return &rx_last;
+  strcpy(TT.fs_last, fs);
+  regfree(&TT.rx_last);
+  rx_compile_or_die(&TT.rx_last, fmt_one_char_fs(fs));
+  return &TT.rx_last;
 }
 
 // Only for use by split() builtin
@@ -220,29 +213,28 @@ static void set_zvalue_str(struct zvalue *v, char *s, size_t size)
   v->flags = ZF_STR;
 }
 
-static int nf_internal = 0;  // should match NF
 
 // All changes to NF go through here!
 static void set_nf(int nf)
 {
-  STACK[NF].num = nf_internal = nf;
+  STACK[NF].num = TT.nf_internal = nf;
   STACK[NF].flags = ZF_NUM;
 }
 
 static void set_field(struct zmap *unused, int fnum, char *s, size_t size)
 { (void)unused;
   if (fnum < 0 || fnum > FIELDS_MAX) ffatal("bad field num %d\n", fnum);
-  int nfields = zlist_len(&fields);
-  // Need nfields to be > fnum b/c e.g. fnum==1 implies 2 fields
+  int nfields = zlist_len(&TT.fields);
+  // Need nfields to be > fnum b/c e.g. fnum==1 implies 2 TT.fields
   while (nfields <= fnum)
-    nfields = zlist_append(&fields, &uninit_zvalue) + 1;
+    nfields = zlist_append(&TT.fields, &uninit_zvalue) + 1;
   set_zvalue_str(&FIELD[fnum], s, size);
   set_nf(fnum);
   check_numeric_string(&FIELD[fnum]);
 }
 
-// Split s via fs, using setter; return number of fields.
-// This is used to split fields and also for split() builtin.
+// Split s via fs, using setter; return number of TT.fields.
+// This is used to split TT.fields and also for split() builtin.
 
 
 static int splitter(void (*setter)(struct zmap *, int, char *, size_t), struct zmap *m, char *s, struct zvalue *zvfs)
@@ -273,13 +265,13 @@ static int splitter(void (*setter)(struct zmap *, int, char *, size_t), struct z
     eflag |= REG_NOTBOL;
 
     // Field will be s up to (not including) the offset. If offset
-    // is zero and FS is found and FS is ' ' (rx_default "[ \t]+"),
+    // is zero and FS is found and FS is ' ' (TT.rx_default "[ \t]+"),
     // then the find is the leading or trailing spaces and/or tabs.
     // If so, skip this (empty) field, otherwise set field, length is offs.
-    if (offs || r || rx != &rx_default) setter(m, ++nf, s, offs);
+    if (offs || r || rx != &TT.rx_default) setter(m, ++nf, s, offs);
     s += end;
   }
-  if (!r && rx != &rx_default) setter(m, ++nf, "", 0);
+  if (!r && rx != &TT.rx_default) setter(m, ++nf, "", 0);
   return nf;
 }
 
@@ -295,7 +287,7 @@ static void build_fields(void)
 static void rebuild_field0(void)
 {
   struct zstring *s = FIELD[0].vst;
-  int nf = nf_internal;
+  int nf = TT.nf_internal;
   // uninit value needed for eventual reference to .vst in zstring_release()
   struct zvalue tempv = uninit_zvalue;
   zvalue_copy(&tempv, &STACK[OFS]);
@@ -317,18 +309,18 @@ static void rebuild_field0(void)
 
 // get field ref (lvalue ref) in prep for assignment to field.
 // [... assigning to a nonexistent field (for example, $(NF+2)=5) shall
-// increase the value of NF; create any intervening fields with the
+// increase the value of NF; create any intervening TT.fields with the
 // uninitialized value; and cause the value of $0 to be recomputed, with the
-// fields being separated by the value of OFS.]
+// TT.fields being separated by the value of OFS.]
 // Called by run:setup_lvalue()
 static struct zvalue *get_field_ref(int fnum)
 {
   if (fnum < 0 || fnum > FIELDS_MAX) error_exit("bad field num %d\n", fnum);
-  if (fnum > nf_internal) {
-    // Ensure fields list is large enough for fnum
-    // Need len of fields to be > fnum b/c e.g. fnum==1 implies 2 fields
-    for (int i = nf_internal + 1; i <= fnum; i++) {
-      if (i == zlist_len(&fields)) zlist_append(&fields, &uninit_zvalue);
+  if (fnum > TT.nf_internal) {
+    // Ensure TT.fields list is large enough for fnum
+    // Need len of TT.fields to be > fnum b/c e.g. fnum==1 implies 2 TT.fields
+    for (int i = TT.nf_internal + 1; i <= fnum; i++) {
+      if (i == zlist_len(&TT.fields)) zlist_append(&TT.fields, &uninit_zvalue);
       zvalue_copy(&FIELD[i], &uninit_string_zvalue);
     }
     set_nf(fnum);
@@ -350,25 +342,25 @@ static void copy_to_field0(char *buf, size_t k)
   build_fields();
 }
 
-// After changing $0, must rebuild fields & reset NF
+// After changing $0, must rebuild TT.fields & reset NF
 // Changing other field must rebuild $0
 // Called in run by gsub() and assignment ops.
 static void fixup_fields(int fnum)
 {
   if (fnum == THIS_MEANS_SET_NF) {  // NF was assigned to
     int new_nf = get_int_val(&STACK[NF]);
-    // Ensure fields list is large enough for fnum
-    // Need len of fields to be > fnum b/c e.g. fnum==1 implies 2 fields
-    for (int i = nf_internal + 1; i <= new_nf; i++) {
-      if (i == zlist_len(&fields)) zlist_append(&fields, &uninit_zvalue);
+    // Ensure TT.fields list is large enough for fnum
+    // Need len of TT.fields to be > fnum b/c e.g. fnum==1 implies 2 TT.fields
+    for (int i = TT.nf_internal + 1; i <= new_nf; i++) {
+      if (i == zlist_len(&TT.fields)) zlist_append(&TT.fields, &uninit_zvalue);
       zvalue_copy(&FIELD[i], &uninit_string_zvalue);
     }
-    set_nf(nf_internal = STACK[NF].num);
+    set_nf(TT.nf_internal = STACK[NF].num);
     rebuild_field0();
     return;
   }
   // fnum is # of field that was just updated.
-  // If it's 0, need to rebuild the fields 1... n.
+  // If it's 0, need to rebuild the TT.fields 1... n.
   // If it's non-0, need to rebuild field 0.
   val_to_str(&FIELD[fnum]);
   if (fnum) check_numeric_string(&FIELD[fnum]);
@@ -381,8 +373,8 @@ static void fixup_fields(int fnum)
 static void push_field(int fnum)
 {
   if (fnum < 0 || fnum > FIELDS_MAX) error_exit("bad field num %d\n", fnum);
-  // Contrary to posix, awk evaluates fields beyond $NF as empty strings.
-  if (fnum > nf_internal) push_val(&uninit_string_zvalue);
+  // Contrary to posix, awk evaluates TT.fields beyond $NF as empty strings.
+  if (fnum > TT.nf_internal) push_val(&uninit_string_zvalue);
   else push_val(&FIELD[fnum]);
 }
 
@@ -390,22 +382,8 @@ static void push_field(int fnum)
 ////   run
 ////////////////////
 
-static struct runtime_globals {
-  struct zvalue cur_arg;
-  FILE *fp;           // current data file
-  int narg;           // cmdline arg index
-  int nfiles;         // num of cmdline data file args processed
-  int eof;            // all cmdline files (incl. stdin) read
-  char *recbuf;
-  size_t recbufsize;
-  char *recbuf_multiline;
-  size_t recbufsize_multiline;
-  struct zstring *zspr;      // Global to receive sprintf() string value
-} rgl;
+#define STKP    (&STACK[TT.stkptr])
 
-#define STKP    (&STACK[stkptr])
-
-static char range_sw[64];   // FIXME TODO quick and dirty set of range switches
 
 
 // Random number generator
@@ -443,14 +421,14 @@ static void check_not_map(struct zvalue *v)
 
 static int popnumval(void)
 {
-  stack.avail -= sizeof(struct zvalue);
-  return STACK[stkptr--].num;
+  TT.stack.avail -= sizeof(struct zvalue);
+  return STACK[TT.stkptr--].num;
 }
 
 static void drop(void)
 {
-  stack.avail -= sizeof(struct zvalue);
-  struct zvalue *v = &STACK[stkptr--];
+  TT.stack.avail -= sizeof(struct zvalue);
+  struct zvalue *v = &STACK[TT.stkptr--];
   zvalue_release_zstring(v);
 }
 
@@ -480,7 +458,7 @@ static void force_maybemap_to_map(struct zvalue *v)
   if (v->flags & ZF_MAYBEMAP) v->flags = ZF_MAP;
 }
 
-// Set and return logical (0/1) val of top stack value; flag value as NUM.
+// Set and return logical (0/1) val of top TT.stack value; flag value as NUM.
 static int get_set_logical(void)
 {
   struct zvalue *v = STKP;
@@ -586,7 +564,7 @@ static struct zvalue *setup_lvalue(int n, int parmbase, int *field_num)
     v = get_field_ref(*field_num = k);
   } else if (v->flags & (ZF_REF | ZF_MAPREF)) {
     if (k == NF) *field_num = THIS_MEANS_SET_NF;
-    if (k < 0) k = parmbase - k;    // loc of var on stack
+    if (k < 0) k = parmbase - k;    // loc of var on TT.stack
     v = &STACK[k];
     // Next line caused mem leaks and bad 'array in scalar context' errors
     // force_maybemap_to_map(v);
@@ -603,31 +581,16 @@ static struct zvalue *setup_lvalue(int n, int parmbase, int *field_num)
   return v;
 }
 
-// TODO FIXME This is set pretty high (1010) to pass T.overflow test of 1000
-// open files; files[] is 24240 bytes. Maybe should be allocated dynamically?
-#define MAX_FILES 1010
-struct zfile {
-  struct zstring *fn;
-  FILE *fp;
-  char mode;  // w, a, or r
-  char file_or_pipe;  // f or p
-};
-
-static int file_cnt = 0, std_file_cnt = 0;
-
-static struct zfile files[MAX_FILES];
-
-
 static void setup_std_file(char *fn, FILE *fp, char *mode)
 {
-  files[file_cnt++] = (struct zfile){new_zstring(fn, strlen(fn)), fp, *mode, 'f'};
-  std_file_cnt = file_cnt;
+  TT.files[TT.file_cnt++] = (struct zfile){new_zstring(fn, strlen(fn)), fp, *mode, 'f'};
+  TT.std_file_cnt = TT.file_cnt;
 }
 
 static int fflush_all(void)
 {
-  for (int k = 0; k < file_cnt; k++) {
-    struct zfile *zof = &files[k];
+  for (int k = 0; k < TT.file_cnt; k++) {
+    struct zfile *zof = &TT.files[k];
     if (fflush(zof->fp)) return -1;
   }
   return 0;
@@ -636,12 +599,12 @@ static int fflush_all(void)
 static int fflush_file(int nargs)
 {
   if (!nargs) return fflush_all();
-  val_to_str(STKP);   // filename at top of stack
+  val_to_str(STKP);   // filename at top of TT.stack
   // Null string means flush all
   if (!STKP[0].vst->str[0]) return fflush_all();
   // is it open in file table?
-  for (int k = 0; k < file_cnt; k++) {
-    struct zfile *zof = &files[k];
+  for (int k = 0; k < TT.file_cnt; k++) {
+    struct zfile *zof = &TT.files[k];
     if (zstring_match(STKP[0].vst, zof->fn)) {
       // if (zof->file_or_pipe == 'f' && fflush(zof->fp) == 0)
       //   return 0;  // otherwise assume fail
@@ -654,16 +617,16 @@ static int fflush_file(int nargs)
 
 static int close_file(void)
 {
-  val_to_str(STKP);   // filename at top of stack
+  val_to_str(STKP);   // filename at top of TT.stack
   // is it open in file table?
-  for (int k = 0; k < file_cnt; k++) {
-    struct zfile *zof = &files[k];
+  for (int k = 0; k < TT.file_cnt; k++) {
+    struct zfile *zof = &TT.files[k];
     if (zstring_match(STKP[0].vst, zof->fn)) {
       if (!zof->fp || (zof->file_or_pipe == 'f' ? fclose : pclose)(zof->fp) < 0)
         return -1;  // otherwise assume successful close
-      if (k < std_file_cnt) return 0;
+      if (k < TT.std_file_cnt) return 0;
       // close hole in table if not last slot
-      if (k < --file_cnt) files[k] = files[file_cnt];
+      if (k < --TT.file_cnt) TT.files[k] = TT.files[TT.file_cnt];
       return 0;
     }
   }
@@ -676,20 +639,20 @@ static int close_file(void)
 // in whatever mode it's already in; i.e. > after >> still appends.
 static FILE *setup_file(char *file_or_pipe, char *mode)
 {
-  val_to_str(STKP);   // filename at top of stack
+  val_to_str(STKP);   // filename at top of TT.stack
   struct zfile *zof = 0;
   // is it already open in file table?
-  for (int k = 0; k < file_cnt; k++) {
-    zof = &files[k];
+  for (int k = 0; k < TT.file_cnt; k++) {
+    zof = &TT.files[k];
     if (zstring_match(STKP[0].vst, zof->fn)) {
       drop();
       return zof->fp;   // open; return it
     }
   }
   // Open and put in table
-  if (file_cnt >= MAX_FILES) fatal("too many open output files!\n");
-  zof = &files[file_cnt];
-  file_cnt++;
+  if (TT.file_cnt >= MAX_FILES) fatal("too many open output TT.files!\n");
+  zof = &TT.files[TT.file_cnt];
+  TT.file_cnt++;
   zof->fn = STKP[0].vst;
   zstring_incr_refcnt(zof->fn);
   drop();
@@ -708,7 +671,7 @@ static FILE *setup_outfile(char *file_or_pipe, char *mode)
 
 static int getcnt(int k)
 {
-  if (k >= stkptr) fatal("too few args for printf\n");
+  if (k >= TT.stkptr) fatal("too few args for printf\n");
   return (int)val_to_num(&STACK[k]);
 }
 
@@ -722,14 +685,14 @@ static int fsprintf(FILE *ignored, const char *fmt, ...)
   va_end(args);
 
   // Unfortunately we have to mess with zstring internals here.
-  if (len > (int)(rgl.zspr->capacity - rgl.zspr->size) - 1) {
-    size_t cap = 2 * rgl.zspr->capacity + len;
-    rgl.zspr = xrealloc(rgl.zspr, sizeof(*rgl.zspr) + cap);
-    rgl.zspr->capacity = cap;
+  if (len > (int)(TT.rgl.zspr->capacity - TT.rgl.zspr->size) - 1) {
+    size_t cap = 2 * TT.rgl.zspr->capacity + len;
+    TT.rgl.zspr = xrealloc(TT.rgl.zspr, sizeof(*TT.rgl.zspr) + cap);
+    TT.rgl.zspr->capacity = cap;
   }
-  vsnprintf(rgl.zspr->str + rgl.zspr->size, len+1, fmt, args2);
-  rgl.zspr->size += len;
-  rgl.zspr->str[rgl.zspr->size] = 0;
+  vsnprintf(TT.rgl.zspr->str + TT.rgl.zspr->size, len+1, fmt, args2);
+  TT.rgl.zspr->size += len;
+  TT.rgl.zspr->str[TT.rgl.zspr->size] = 0;
 
   va_end(args2);
   return 0;
@@ -737,7 +700,6 @@ static int fsprintf(FILE *ignored, const char *fmt, ...)
 
 
 
-static regex_t rx_printf_fmt;
 static char *printf_fmt_rx = "%[-+ #0]*([*]|[0-9]*)([.]([*]|[0-9]*))?[aAdiouxXfFeEgGcs%]";
 
 static void varprint(int(*fpvar)(FILE *, const char *, ...), FILE *outfp, int nargs)
@@ -746,9 +708,9 @@ static void varprint(int(*fpvar)(FILE *, const char *, ...), FILE *outfp, int na
   double n = 0;
   char *s;
   regoff_t offs = -1, e = -1;
-  val_to_str(&STACK[stkptr-nargs+1]);
-  char *fmt = STACK[stkptr-nargs+1].vst->str;
-  k = stkptr - nargs + 2;
+  val_to_str(&STACK[TT.stkptr-nargs+1]);
+  char *fmt = STACK[TT.stkptr-nargs+1].vst->str;
+  k = TT.stkptr - nargs + 2;
   while (*fmt) {
     nn = strcspn(fmt, "%");
     if (nn) {
@@ -764,7 +726,7 @@ static void varprint(int(*fpvar)(FILE *, const char *, ...), FILE *outfp, int na
     if (!fmtc) ffatal("bad printf format '%s'", fmt);
     holdc = fmt[nnc+2];
     fmt[nnc+2] = 0;
-    if (rx_find(&rx_printf_fmt, fmt, &offs, &e, 0))
+    if (rx_find(&TT.rx_printf_fmt, fmt, &offs, &e, 0))
       ffatal("bad printf format <%s>\n", fmt);
     int nargsneeded = 1;
     for (char *p = strchr(fmt, '*'); p; p = strchr(p+1, '*'))
@@ -782,7 +744,7 @@ static void varprint(int(*fpvar)(FILE *, const char *, ...), FILE *outfp, int na
         cnt2 = getcnt(k++);
         ATTR_FALLTHROUGH_INTENDED;
       case 1:
-        if (k > stkptr) fatal("not enough args for printf format\n");
+        if (k > TT.stkptr) fatal("not enough args for printf format\n");
         if (fmtc == 's') {
           val_to_str(&STACK[k]);
           s = STACK[k++].vst->str;
@@ -899,35 +861,35 @@ static char *nextfilearg(void)
 {
   char *arg;
   do {
-    if (++rgl.narg >= (int)val_to_num(&STACK[ARGC])) return 0;
+    if (++TT.rgl.narg >= (int)val_to_num(&STACK[ARGC])) return 0;
     struct zvalue *v = &STACK[ARGV];
     struct zvalue zkey = ZVINIT(ZF_STR, 0,
-        num_to_zstring(rgl.narg, val_to_str(&STACK[CONVFMT])->vst->str));
+        num_to_zstring(TT.rgl.narg, val_to_str(&STACK[CONVFMT])->vst->str));
     arg = "";
     if (zmap_find(v->map, zkey.vst)) {
-      zvalue_copy(&rgl.cur_arg, val_to_str(get_map_val(v, &zkey)));
-      arg = rgl.cur_arg.vst->str;
+      zvalue_copy(&TT.rgl.cur_arg, val_to_str(get_map_val(v, &zkey)));
+      arg = TT.rgl.cur_arg.vst->str;
     }
     zvalue_release_zstring(&zkey);
   } while (!*arg || assignment_arg(arg));
-  rgl.nfiles++;
+  TT.rgl.nfiles++;
   return arg;
 }
 
 static int next_fp(void)
 {
   char *fn = nextfilearg();
-  if (rgl.fp && rgl.fp != stdin) fclose(rgl.fp);
-  if ((!fn && !rgl.nfiles && rgl.fp != stdin) || (fn && !strcmp(fn, "-"))) {
-    rgl.fp = stdin;
+  if (TT.rgl.fp && TT.rgl.fp != stdin) fclose(TT.rgl.fp);
+  if ((!fn && !TT.rgl.nfiles && TT.rgl.fp != stdin) || (fn && !strcmp(fn, "-"))) {
+    TT.rgl.fp = stdin;
     zvalue_release_zstring(&STACK[FILENAME]);
     STACK[FILENAME].vst = new_zstring("<stdin>", 7);
   } else if (fn) {
-    if (!(rgl.fp = fopen(fn, "r"))) ffatal("can't open %s\n", fn);
-    zvalue_copy(&STACK[FILENAME], &rgl.cur_arg);
+    if (!(TT.rgl.fp = fopen(fn, "r"))) ffatal("can't open %s\n", fn);
+    zvalue_copy(&STACK[FILENAME], &TT.rgl.cur_arg);
     set_num(&STACK[FNR], 0);
   } else {
-    rgl.eof = 1;
+    TT.rgl.eof = 1;
     return 0;
   }
   return 1;
@@ -938,21 +900,21 @@ static ssize_t getrec_multiline(FILE *fp)
 {
   ssize_t k, kk;
   do {
-    k = getdelim(&rgl.recbuf, &rgl.recbufsize, '\n', fp);
-  } while (k > 0 && rgl.recbuf[0] == '\n');
+    k = getdelim(&TT.rgl.recbuf, &TT.rgl.recbufsize, '\n', fp);
+  } while (k > 0 && TT.rgl.recbuf[0] == '\n');
   if (k < 0) return k;
   // k > 0 and recbuf is not only a \n. Prob. ends w/ \n
   // but may not at EOF (last line w/o newline)
   for (;;) {
-    kk = getdelim(&rgl.recbuf_multiline, &rgl.recbufsize_multiline, '\n', fp);
-    if (kk < 0 || rgl.recbuf_multiline[0] == '\n') break;
-    // data is in rgl.recbuf[0..k-1]; append to it
-    if ((size_t)(k + kk + 1) > rgl.recbufsize)
-      rgl.recbuf = xrealloc(rgl.recbuf, rgl.recbufsize = k + kk + 1);
-    memmove(rgl.recbuf + k, rgl.recbuf_multiline, kk+1);
+    kk = getdelim(&TT.rgl.recbuf_multiline, &TT.rgl.recbufsize_multiline, '\n', fp);
+    if (kk < 0 || TT.rgl.recbuf_multiline[0] == '\n') break;
+    // data is in TT.rgl.recbuf[0..k-1]; append to it
+    if ((size_t)(k + kk + 1) > TT.rgl.recbufsize)
+      TT.rgl.recbuf = xrealloc(TT.rgl.recbuf, TT.rgl.recbufsize = k + kk + 1);
+    memmove(TT.rgl.recbuf + k, TT.rgl.recbuf_multiline, kk+1);
     k += kk;
   }
-  if (k > 1 && rgl.recbuf[k-1] == '\n') rgl.recbuf[--k] = '\0';
+  if (k > 1 && TT.rgl.recbuf[k-1] == '\n') TT.rgl.recbuf[--k] = '\0';
   return k;
 }
 
@@ -961,18 +923,18 @@ static ssize_t getrec_f(FILE *fp)
   int rs = ensure_str(&STACK[RS])->vst->str[0] & 0xff;
   if (!rs) return getrec_multiline(fp);
 
-  ssize_t k = getdelim(&rgl.recbuf, &rgl.recbufsize, rs, fp);
-  if (k > 0 && rgl.recbuf[k-1] == rs) rgl.recbuf[--k] = 0;
+  ssize_t k = getdelim(&TT.rgl.recbuf, &TT.rgl.recbufsize, rs, fp);
+  if (k > 0 && TT.rgl.recbuf[k-1] == rs) TT.rgl.recbuf[--k] = 0;
   return k;
 }
 
 static ssize_t getrec(void)
 {
   ssize_t k;
-  if (rgl.eof) return -1;
-  if (!rgl.fp) next_fp();
+  if (TT.rgl.eof) return -1;
+  if (!TT.rgl.fp) next_fp();
   do {
-    if ((k = getrec_f(rgl.fp)) >= 0) return k;
+    if ((k = getrec_f(TT.rgl.fp)) >= 0) return k;
   } while (next_fp());
   return -1;
 }
@@ -981,7 +943,7 @@ static ssize_t getrec_f0_f(FILE *fp)
 {
   ssize_t k = getrec_f(fp);
   if (k >= 0) {
-    copy_to_field0(rgl.recbuf, k);
+    copy_to_field0(TT.rgl.recbuf, k);
   }
   return k;
 }
@@ -990,7 +952,7 @@ static ssize_t getrec_f0(void)
 {
   ssize_t k = getrec();
   if (k >= 0) {
-    copy_to_field0(rgl.recbuf, k);
+    copy_to_field0(TT.rgl.recbuf, k);
     incr_zvalue(&STACK[NR]);
     incr_zvalue(&STACK[FNR]);
   }
@@ -1008,7 +970,7 @@ static int awk_getline(int source, FILE *fp, struct zvalue *v)
   if (is_stream && !fp) return -1;
   if (v) {
     if ((k = is_stream ? getrec_f(fp) : getrec()) < 0) return 0;
-    set_string(v, new_zstring(rgl.recbuf, k));
+    set_string(v, new_zstring(TT.rgl.recbuf, k));
     if (!is_stream) {
       incr_zvalue(&STACK[NR]);
       incr_zvalue(&STACK[FNR]);
@@ -1037,7 +999,7 @@ static void gsub(int opcode, int nargs, int parmbase)
 { (void)nargs;
   int field_num = -1;
   // compile ensures 3 args
-  struct zvalue *v = setup_lvalue(stkptr, parmbase, &field_num);
+  struct zvalue *v = setup_lvalue(TT.stkptr, parmbase, &field_num);
   struct zvalue *ere = STKP-2;
   struct zvalue *repl = STKP-1;
   regex_t rx, *rxp = &rx;
@@ -1323,7 +1285,7 @@ static int interpx(int start, int *status)
         // Stack is: ... scalar_ref value_to_op_by
         // or ... subscript_val map_ref value_to_op_by
         // or ... fieldref value_to_op_by
-        v = setup_lvalue(stkptr-1, parmbase, &field_num);
+        v = setup_lvalue(TT.stkptr-1, parmbase, &field_num);
         val_to_num(v);
         val_to_num(STKP);
         switch (opcode) {
@@ -1359,7 +1321,7 @@ static int interpx(int start, int *status)
         // Stack is: ... scalar_ref value_to_assign
         // or ... subscript_val map_ref value_to_assign
         // or ... fieldref value_to_assign
-        v = setup_lvalue(stkptr-1, parmbase, &field_num);
+        v = setup_lvalue(TT.stkptr-1, parmbase, &field_num);
         zvalue_copy(v, STKP);
         swap();
         drop();
@@ -1373,7 +1335,7 @@ static int interpx(int start, int *status)
         // Stack is: ... scalar_ref
         // or ... subscript_val map_ref
         // or ... fieldnum fieldref
-        v = setup_lvalue(stkptr, parmbase, &field_num);
+        v = setup_lvalue(TT.stkptr, parmbase, &field_num);
         val_to_num(v);
         v->flags = ZF_NUM;
         switch (opcode) {
@@ -1382,7 +1344,7 @@ static int interpx(int start, int *status)
             // invalidating the pointer.
             v->num += (opcode == tkincr) ? 1 : -1;
             push_val(v);
-            // Now reverse the incr/decr on the top stack val.
+            // Now reverse the incr/decr on the top TT.stack val.
             STKP->num -= (opcode == tkincr) ? 1 : -1;
             break;
           case oppreincr: case oppredecr:
@@ -1427,8 +1389,8 @@ static int interpx(int start, int *status)
           val_to_str(&tempv);
           for (int k = 0; k < nargs; k++) {
             if (k) fprintf(outfp, "%s", tempv.vst->str);
-            int sp = stkptr - nargs + 1 + k;
-            ////// FIXME refcnt -- prob. don't need to copy from stack?
+            int sp = TT.stkptr - nargs + 1 + k;
+            ////// FIXME refcnt -- prob. don't need to copy from TT.stack?
             v = &STACK[sp];
             val_to_str_fmt(v, val_to_str(&STACK[OFMT])->vst->str);
             struct zstring *zs = v->vst;
@@ -1461,7 +1423,7 @@ static int interpx(int start, int *status)
         int nparms = zlist_len(loctab)-1;
 
         nargs = popnumval();
-        int newparmbase = stkptr - nargs;
+        int newparmbase = TT.stkptr - nargs;
         STACK[newparmbase + PREV_PARMBASE].num = parmbase;
         parmbase = newparmbase;
         for ( ;nargs > nparms; nargs--)
@@ -1505,16 +1467,16 @@ static int interpx(int start, int *status)
         drop();
 
 
-        // Remove the local args (not supplied by caller) from stack, check to
+        // Remove the local args (not supplied by caller) from TT.stack, check to
         // release any map data created.
-        while (stkptr > parmbase + nargs) {
+        while (TT.stkptr > parmbase + nargs) {
           if ((STKP)->flags & ZF_ANYMAP) {
             zmap_delete_map_incl_slotdata((STKP)->map);
             xfree((STKP)->map);
           }
           drop();
         }
-        while (stkptr > parmbase + RETURN_VALUE)
+        while (TT.stkptr > parmbase + RETURN_VALUE)
           drop();
         ip = &ZCODE[(int)STACK[parmbase+RETURN_ADDR].num];
         parmbase = STACK[parmbase+PREV_PARMBASE].num;
@@ -1530,7 +1492,7 @@ static int interpx(int start, int *status)
 
       case tkfunc:        // function call
         nargs = *ip++;
-        newparmbase = stkptr - nargs;
+        newparmbase = TT.stkptr - nargs;
         STACK[newparmbase+RETURN_ADDR].num = ip - &ZCODE[0];
         STACK[newparmbase+ARG_CNT].num = nargs;
         push_int_val(nargs);      // FIXME TODO pass this in a zregister?
@@ -1555,7 +1517,7 @@ static int interpx(int start, int *status)
 
       case opmapdelete:
         k = STKP->num;
-        if (k < 0) k = parmbase - k;    // loc of var on stack
+        if (k < 0) k = parmbase - k;    // loc of var on TT.stack
         v = &STACK[k];
         force_maybemap_to_map(v);
         zmap_delete_map(v->map);
@@ -1564,7 +1526,7 @@ static int interpx(int start, int *status)
 
       case tkdelete:
         k = STKP->num;
-        if (k < 0) k = parmbase - k;    // loc of var on stack
+        if (k < 0) k = parmbase - k;    // loc of var on TT.stack
         v = &STACK[k];
         force_maybemap_to_map(v);
         drop();
@@ -1605,7 +1567,7 @@ static int interpx(int start, int *status)
           kk++;
         STKP->num = kk; // save index for next iteration
         if (kk < zlen) {
-          struct zvalue *var = setup_lvalue(stkptr-2, parmbase, &field_num);
+          struct zvalue *var = setup_lvalue(TT.stkptr-2, parmbase, &field_num);
           var->flags = ZF_STR;
           zstring_release(&var->vst);
           var->vst = MAPSLOT[kk].key;
@@ -1623,7 +1585,7 @@ static int interpx(int start, int *status)
 
       case tkfield:
         // tkfield op has "dummy" 2nd word so that convert_push_to_reference(void)
-        // can find either tkfield or tkvar at same place (ZCODE[zcode_last-1]).
+        // can find either tkfield or tkvar at same place (ZCODE[TT.zcode_last-1]).
         ip++; // skip dummy "operand" instruction field
         val_to_num(STKP);
         push_field((int)((STKP)->num));
@@ -1695,7 +1657,7 @@ static int interpx(int start, int *status)
       case oprange1:
         range_num = *ip++;
         op2 = *ip++;
-        if (range_sw[range_num]) ip += op2;
+        if (TT.range_sw[range_num]) ip += op2;
         break;
 
       case oprange2:
@@ -1703,7 +1665,7 @@ static int interpx(int start, int *status)
         op2 = *ip++;
         t = get_set_logical();  // FIXME only need to get, not set
         drop();
-        if (t) range_sw[range_num] = 1;
+        if (t) TT.range_sw[range_num] = 1;
         else ip += op2;
         break;
 
@@ -1711,7 +1673,7 @@ static int interpx(int start, int *status)
         range_num = *ip++;
         t = get_set_logical();  // FIXME only need to get, not set
         drop();
-        if (t) range_sw[range_num] = 0;
+        if (t) TT.range_sw[range_num] = 0;
         break;
 
       case tkexit:
@@ -1729,7 +1691,7 @@ static int interpx(int start, int *status)
       case tkgetline:
         nargs = *ip++;
         int source = *ip++;
-        // stack is:
+        // TT.stack is:
         // if tkgetline 0 tkeof:   (nothing stacked; plain getline)
         // if tkgetline 1 tkeof:   (lvalue)
         // if tkgetline 1 tklt:    (filename_string)
@@ -1751,14 +1713,14 @@ static int interpx(int start, int *status)
           nargs--;
         }
         // now cases are:
-        // nargs source  stack
+        // nargs source  TT.stack
         //  0 tkeof:   (nothing; plain getline) from current data file
         //  1 tkeof:   (lvalue)  from current data file
         //  0 tklt:    (nothing) from named file in 'stream'
         //  1 tklt:    (lvalue)  from  named file in 'stream'
         //  0 tkpipe:  (nothing) from piped command in 'stream'
         //  1 tkpipe:  (lvalue)  from piped command in 'stream'
-        v = nargs ? setup_lvalue(stkptr, parmbase, &field_num) : 0;
+        v = nargs ? setup_lvalue(TT.stkptr, parmbase, &field_num) : 0;
         if (v) drop();
 
 
@@ -1812,14 +1774,14 @@ static int interpx(int start, int *status)
 
       case tksubstr:
         nargs = *ip++;
-        struct zstring *zz = val_to_str(&STACK[stkptr-nargs+1])->vst;
+        struct zstring *zz = val_to_str(&STACK[TT.stkptr-nargs+1])->vst;
         // Offset of start of string; convert 1-based to 0-based
-        ssize_t mm = clamp(trunc(val_to_num(&STACK[stkptr-nargs+2]))-1, 0, zz->size);
+        ssize_t mm = clamp(trunc(val_to_num(&STACK[TT.stkptr-nargs+2]))-1, 0, zz->size);
         ssize_t nn = zz->size - mm;   // max possible substring length
         if (nargs == 3) nn = clamp(trunc(val_to_num(STKP)), 0, nn);
         struct zstring *zzz = new_zstring(zz->str + mm, nn);
-        zstring_release(&STACK[stkptr-nargs+1].vst);
-        STACK[stkptr-nargs+1].vst = zzz;
+        zstring_release(&STACK[TT.stkptr-nargs+1].vst);
+        STACK[TT.stkptr-nargs+1].vst = zzz;
         drop_n(nargs - 1);
         break;
 
@@ -1886,11 +1848,11 @@ static int interpx(int start, int *status)
 
       case tksprintf:
         nargs = *ip++;
-        zstring_release(&rgl.zspr);
-        rgl.zspr = new_zstring("", 0);
+        zstring_release(&TT.rgl.zspr);
+        TT.rgl.zspr = new_zstring("", 0);
         varprint(fsprintf, 0, nargs);
         drop_n(nargs);
-        vv = (struct zvalue)ZVINIT(ZF_STR, 0, rgl.zspr);
+        vv = (struct zvalue)ZVINIT(ZF_STR, 0, TT.rgl.zspr);
         push_val(&vv);
         break;
 
@@ -1908,20 +1870,20 @@ static int interpx(int start, int *status)
 }
 
 // interp() wraps the main interpreter loop interpx(). The main purpose
-// is to allow the stack to be readjusted after an 'exit' from a function.
-// Also catches errors, as the normal operation should leave the stack
+// is to allow the TT.stack to be readjusted after an 'exit' from a function.
+// Also catches errors, as the normal operation should leave the TT.stack
 // depth unchanged after each run through the rules.
 static int interp(int start, int *status)
 {
-  int stkptrbefore = stkptr;
+  int stkptrbefore = TT.stkptr;
   int r = interpx(start, status);
-  // If exit from function, stack will be loaded with args etc. Clean it.
+  // If exit from function, TT.stack will be loaded with args etc. Clean it.
   if (r == tkexit) {
-    stack.avail -= (stkptr - stkptrbefore) * stack.size;
-    stkptr = stkptrbefore;
+    TT.stack.avail -= (TT.stkptr - stkptrbefore) * TT.stack.size;
+    TT.stkptr = stkptrbefore;
   }
-  if (stkptr - stkptrbefore)
-    fprintf(stderr, "!! stack pointer offset: %d\n", stkptr - stkptrbefore);
+  if (TT.stkptr - stkptrbefore)
+    fprintf(stderr, "!! TT.stack pointer offset: %d\n", TT.stkptr - stkptrbefore);
   return r;
 }
 
@@ -1937,7 +1899,7 @@ static void insert_argv_map(struct zvalue *map, int key, char *value)
 
 static void init_globals(int optind, int argc, char **argv, char *sepstring, int num_assignments, char **assignments, char **envp)
 {
-  // Global variables reside at the bottom of the stack. Start with the awk
+  // Global variables reside at the bottom of the TT.stack. Start with the awk
   // "special variables":  ARGC, ARGV, CONVFMT, ENVIRON, FILENAME, FNR, FS, NF,
   // NR, OFMT, OFS, ORS, RLENGTH, RS, RSTART, SUBSEP
 
@@ -1962,7 +1924,7 @@ static void init_globals(int optind, int argc, char **argv, char *sepstring, int
   m = (struct zvalue)ZVINIT(ZF_MAP, 0, 0);
   zvalue_map_init(&m);
   STACK[ARGV] = m;
-  insert_argv_map(&m, 0, progname);
+  insert_argv_map(&m, 0, TT.progname);
   int nargc = 1;
   for (int k = optind; k < argc; k++) {
     insert_argv_map(&m, nargc, argv[k]);
@@ -1986,7 +1948,7 @@ static void init_globals(int optind, int argc, char **argv, char *sepstring, int
 
   // Init program globals.
   //
-  // Push global variables on the stack at offsets matching their index in the
+  // Push global variables on the TT.stack at offsets matching their index in the
   // global var table.  In the global var table we may have the type as scalar
   // or map if it is used as such in the program. In that case we init the
   // pushed arg from the type of the globals table.
@@ -2001,8 +1963,8 @@ static void init_globals(int optind, int argc, char **argv, char *sepstring, int
   // See force_maybemap_to_scalar(), and the similar comment in
   // 'case tkfunction:' above.
   //
-  int gstx, len = zlist_len(&globals_table);
-  for (gstx = spec_var_limit; gstx < len; gstx++) {
+  int gstx, len = zlist_len(&TT.globals_table);
+  for (gstx = TT.spec_var_limit; gstx < len; gstx++) {
     struct symtab_slot gs = GLOBAL[gstx];
     struct zvalue v = ZVINIT(gs.flags, 0, 0);
     if (v.flags == 0) {
@@ -2026,7 +1988,7 @@ static void init_globals(int optind, int argc, char **argv, char *sepstring, int
     assign_global(asgn, val);
   }
 
-  rgl.cur_arg = new_str_val("<cmdline>");
+  TT.rgl.cur_arg = new_str_val("<cmdline>");
   uninit_string_zvalue = new_str_val("");
   zvalue_copy(&FIELD[0], &uninit_string_zvalue);
 }
@@ -2035,12 +1997,12 @@ static void run_files(int *status)
 {
   int r = 0;
   while (r != tkexit && *status < 0 && getrec_f0() >= 0)
-    if ((r = interp(cgl.first_recrule, status)) == tknextfile) next_fp();
+    if ((r = interp(TT.cgl.first_recrule, status)) == tknextfile) next_fp();
 }
 
 static void free_literal_regex(void)
 {
-  int len = zlist_len(&literals);
+  int len = zlist_len(&TT.literals);
   for (int k = 1; k < len; k++)
     if (is_rx(&LITERAL[k])) regfree(LITERAL[k].rx);
 }
@@ -2049,21 +2011,21 @@ EXTERN void run(int optind, int argc, char **argv, char *sepstring, int num_assi
 {
   init_globals(optind, argc, argv, sepstring, num_assignments, assignments, envp);
   init_field_rx();
-  rx_compile_or_die(&rx_printf_fmt, printf_fmt_rx);
+  rx_compile_or_die(&TT.rx_printf_fmt, printf_fmt_rx);
   setup_std_file("-", stdin, "r");
   setup_std_file("/dev/stdin", stdin, "r");
   setup_std_file("/dev/stdout", stdout, "w");
   setup_std_file("/dev/stderr", stderr, "w");
   seed_jkiss32(123);
   int status = -1, r = 0;
-  if (cgl.first_begin) r = interp(cgl.first_begin, &status);
+  if (TT.cgl.first_begin) r = interp(TT.cgl.first_begin, &status);
   if (r != tkexit)
-    if (cgl.first_recrule) run_files(&status);
-  if (cgl.first_end) r = interp(cgl.first_end, &status);
-  regfree(&rx_printf_fmt);
+    if (TT.cgl.first_recrule) run_files(&status);
+  if (TT.cgl.first_end) r = interp(TT.cgl.first_end, &status);
+  regfree(&TT.rx_printf_fmt);
   free_field_rx();
   free_literal_regex();
-  xfree(rgl.recbuf);
-  xfree(rgl.recbuf_multiline);
+  xfree(TT.rgl.recbuf);
+  xfree(TT.rgl.recbuf_multiline);
   if (status >= 0) exit(status);
 }

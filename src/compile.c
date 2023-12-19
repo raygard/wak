@@ -1,5 +1,6 @@
 // compile.c
-// Copyright 2023 Ray Gardner
+// Copyright 2024 Ray Gardner
+// License: 0BSD
 // vi: tabstop=2 softtabstop=2 shiftwidth=2
 
 #include "common.h"
@@ -21,8 +22,8 @@ static int primary(void);
 static void stmt(void);
 static void action(int action_type);
 
-#define curtok() (scs->tok)
-#define istok(toknum) (scs->tok == (toknum))
+#define curtok() (TT.scs->tok)
+#define istok(toknum) (TT.scs->tok == (toknum))
 
 static int havetok(int tk)
 {
@@ -35,20 +36,20 @@ static int havetok(int tk)
 //// code and "literal" emitters
 static void gen2cd(int op, int n)
 {
-  zlist_append(&zcode, &op);
-  zcode_last = zlist_append(&zcode, &n);
+  zlist_append(&TT.zcode, &op);
+  TT.zcode_last = zlist_append(&TT.zcode, &n);
 }
 
 static void gencd(int op)
 {
-  zcode_last = zlist_append(&zcode, &op);
+  TT.zcode_last = zlist_append(&TT.zcode, &op);
 }
 
 static int make_literal_str_val(char *s)
 {
   // Only if no nul inside string!
   struct zvalue v = new_str_val(s);
-  return zlist_append(&literals, &v);
+  return zlist_append(&TT.literals, &v);
 }
 
 static int make_literal_regex_val(char *s)
@@ -60,26 +61,26 @@ static int make_literal_regex_val(char *s)
   v.rx = rx;
   // Flag empty rx to make it easy to identify for split() special case
   if (!*s) v.flags |= ZF_EMPTY_RX;
-  return zlist_append(&literals, &v);
+  return zlist_append(&TT.literals, &v);
 }
 
 static int make_literal_num_val(double num)
 {
   struct zvalue v = ZVINIT(ZF_NUM, num, 0);
-  return zlist_append(&literals, &v);
+  return zlist_append(&TT.literals, &v);
 }
 
 static int make_uninit_val(void)
 {
   struct zvalue v = uninit_zvalue;
-  return zlist_append(&literals, &v);
+  return zlist_append(&TT.literals, &v);
 }
 //// END code and "literal" emitters
 
 //// Symbol tables functions
 static int find_func_def_entry(char *s)
 {
-  for (int k = 1; k < zlist_len(&func_def_table); k++)
+  for (int k = 1; k < zlist_len(&TT.func_def_table); k++)
     if (!strcmp(s, FUNC_DEF[k].name)) return k;
   return 0;
 }
@@ -88,14 +89,14 @@ static int add_func_def_entry(char *s)
 {
   struct functab_slot ent = {0, 0, 0, {0, 0, 0, 0}, 0};
   ent.name = xstrdup(s);
-  int slotnum = zlist_append(&func_def_table, &ent);
+  int slotnum = zlist_append(&TT.func_def_table, &ent);
   FUNC_DEF[slotnum].slotnum = slotnum;
   return slotnum;
 }
 
 EXTERN int find_global(char *s)
 {
-  for (int k = 1; k < zlist_len(&globals_table); k++)
+  for (int k = 1; k < zlist_len(&TT.globals_table); k++)
     if (!strcmp(s, GLOBAL[k].name)) return k;
   return 0;
 }
@@ -104,14 +105,14 @@ static int add_global(char *s)
 {
   struct symtab_slot ent = {0, 0, 0};
   ent.name = xstrdup(s);
-  int slotnum = zlist_append(&globals_table, &ent);
+  int slotnum = zlist_append(&TT.globals_table, &ent);
   GLOBAL[slotnum].slotnum = slotnum;
   return slotnum;
 }
 
 static int find_local_entry(char *s)
 {
-  for (int k = 1; k < zlist_len(&locals_table); k++)
+  for (int k = 1; k < zlist_len(&TT.locals_table); k++)
     if (!strcmp(s, LOCAL[k].name)) return k;
   return 0;
 }
@@ -120,7 +121,7 @@ static int add_local_entry(char *s)
 {
   struct symtab_slot ent = {0, 0, 0};
   ent.name = xstrdup(s);
-  int slotnum = zlist_append(&locals_table, &ent);
+  int slotnum = zlist_append(&TT.locals_table, &ent);
   LOCAL[slotnum].slotnum = slotnum;
   return slotnum;
 }
@@ -155,8 +156,8 @@ static char *spec_vars[] = { "ARGC", "ARGV", "CONVFMT", "ENVIRON", "FILENAME",
 static void init_locals_table(void)
 {
   static struct symtab_slot locals_ent;
-  zlist_init(&locals_table, sizeof(struct symtab_slot));
-  zlist_append(&locals_table, &locals_ent);
+  zlist_init(&TT.locals_table, sizeof(struct symtab_slot));
+  zlist_append(&TT.locals_table, &locals_ent);
 }
 
 static void init_tables(void)
@@ -164,20 +165,20 @@ static void init_tables(void)
   static struct symtab_slot global_ent;
   static struct functab_slot func_ent;
 
-  zlist_init(&globals_table, sizeof(struct symtab_slot));
-  zlist_append(&globals_table, &global_ent);
+  zlist_init(&TT.globals_table, sizeof(struct symtab_slot));
+  zlist_append(&TT.globals_table, &global_ent);
 
-  zlist_init(&func_def_table, sizeof(struct functab_slot));
-  zlist_append(&func_def_table, &func_ent);
+  zlist_init(&TT.func_def_table, sizeof(struct functab_slot));
+  zlist_append(&TT.func_def_table, &func_ent);
   init_locals_table();
-  zlist_init(&zcode, sizeof(int));
+  zlist_init(&TT.zcode, sizeof(int));
   gencd(tkeof);                   // FIXME do I need this?
-  zlist_init(&literals, sizeof(struct zvalue));
-  zlist_init(&stack, sizeof(struct zvalue));
-  zlist_init(&fields, sizeof(struct zvalue));
-  zlist_append(&literals, &uninit_zvalue);        // TEMP FIXME
-  zlist_append(&stack, &uninit_zvalue);
-  zlist_append(&fields, &uninit_zvalue);
+  zlist_init(&TT.literals, sizeof(struct zvalue));
+  zlist_init(&TT.stack, sizeof(struct zvalue));
+  zlist_init(&TT.fields, sizeof(struct zvalue));
+  zlist_append(&TT.literals, &uninit_zvalue);        // TEMP FIXME
+  zlist_append(&TT.stack, &uninit_zvalue);
+  zlist_append(&TT.fields, &uninit_zvalue);
   FIELD[0].vst = new_zstring("", 0);
 }
 
@@ -185,14 +186,14 @@ static void init_compiler(void)
 {
   init_tables();
   for (int k = 0; spec_vars[k]; k++) {
-    spec_var_limit = add_global(spec_vars[k]);
-    GLOBAL[spec_var_limit++].flags |= (k == 1 || k == 3) ? ZF_MAP : ZF_SCALAR;
+    TT.spec_var_limit = add_global(spec_vars[k]);
+    GLOBAL[TT.spec_var_limit++].flags |= (k == 1 || k == 3) ? ZF_MAP : ZF_SCALAR;
     push_val(&uninit_zvalue);
   }
 }
 //// END Initialization
 
-//// Parsing and compiling to zcode
+//// Parsing and compiling to TT.zcode
 // Left binding powers
 static int lbp_table[] = {
   // tkunusedtoken, tkeof, tkerr, tknl,
@@ -240,7 +241,7 @@ static int lbp_table[] = {
 static int getlbp(int tok)
 {
   // FIXME: should tkappend be here too? is tkpipe needed?
-  if (cgl.in_print_stmt && ! cgl.paren_level && (tok == tkgt || tok == tkpipe))
+  if (TT.cgl.in_print_stmt && ! TT.cgl.paren_level && (tok == tkgt || tok == tkpipe))
     return 0;
   return (0 <= tok && tok <= tkin) ? lbp_table[tok] :
     // getline is special, not a normal builtin.
@@ -387,7 +388,7 @@ static void builtin_call(int tk, char *builtin_name)
 {
   int num_args = 0;
   expect(tklparen);
-  cgl.paren_level++;
+  TT.cgl.paren_level++;
   switch (tk) {
     case tksub:
     case tkgsub:
@@ -422,7 +423,7 @@ static void builtin_call(int tk, char *builtin_name)
       expr();
       expect(tkcomma);
       optional_nl();
-      if (istok(tkvar) && (scs->ch == ',' || scs->ch == ')')) {
+      if (istok(tkvar) && (TT.scs->ch == ',' || TT.scs->ch == ')')) {
         map_name();
         scan();
       } else {
@@ -441,7 +442,7 @@ static void builtin_call(int tk, char *builtin_name)
       break;
 
     case tklength:
-      if (istok(tkvar) && (scs->ch == ',' || scs->ch == ')')) {
+      if (istok(tkvar) && (TT.scs->ch == ',' || TT.scs->ch == ')')) {
         gen2cd(tkvar, find_or_add_var_name());
         scan();
         num_args++;
@@ -457,7 +458,7 @@ static void builtin_call(int tk, char *builtin_name)
       break;
   }
   expect(tkrparen);
-  cgl.paren_level--;
+  TT.cgl.paren_level--;
 
   check_builtin_arg_counts(tk, num_args, builtin_name);
 
@@ -466,7 +467,7 @@ static void builtin_call(int tk, char *builtin_name)
 
 static void function_call(void)
 {
-  // Function call: generate zcode to:
+  // Function call: generate TT.zcode to:
   //  push placeholder for return value, push placeholder for return addr,
   //  push args, then push number of args, then:
   //      for builtins: gen opcode (e.g. tkgsub)
@@ -476,7 +477,7 @@ static void function_call(void)
   int functk = 0, funcnum = 0;
   char builtin_name[16];  // be sure it's long enough for all builtins
   if (istok(tkbuiltin)) {
-    functk = scs->tokbuiltin;
+    functk = TT.scs->tokbuiltin;
     strcpy(builtin_name, tokstr);
   } else if (istok(tkfunc)) { // user function
     funcnum = find_func_def_entry(tokstr);
@@ -496,12 +497,12 @@ static void function_call(void)
     return;
   }
   expect(tklparen);
-  cgl.paren_level++;
+  TT.cgl.paren_level++;
   if (istok(tkrparen)) {
     scan();
   } else {
     do {
-      if (istok(tkvar) && (scs->ch == ',' || scs->ch == ')')) {
+      if (istok(tkvar) && (TT.scs->ch == ',' || TT.scs->ch == ')')) {
         // Function call arg that is a lone variable. Cannot tell in this
         // context if it is a scalar or map. Just add it to symbol table.
         gen2cd(tkvar, find_or_add_var_name());
@@ -511,7 +512,7 @@ static void function_call(void)
     } while (have_comma());
     expect(tkrparen);
   }
-  cgl.paren_level--;
+  TT.cgl.paren_level--;
   gen2cd(tkfunc, num_args);
 }
 
@@ -579,7 +580,7 @@ static void field_op(void)
   else if (istok(tkvar)) var();
   else primary();
   // tkfield op has "dummy" 2nd word so that convert_push_to_reference(void)
-  // can find either tkfield or tkvar at same place (ZCODE[zcode_last-1]).
+  // can find either tkfield or tkvar at same place (ZCODE[TT.zcode_last-1]).
   gen2cd(tkfield, tkeof);
 }
 
@@ -603,9 +604,9 @@ static char printexprendsy[] = {tkgt, tkappend, tkpipe, tknl, tksemi, tkrbrace, 
 
 static void convert_push_to_reference(void)
 {
-  if (ZCODE[zcode_last - 1] == tkvar) ZCODE[zcode_last-1] = opvarref;
-  else if (ZCODE[zcode_last - 1] == opmap) ZCODE[zcode_last - 1] = opmapref;
-  else if (ZCODE[zcode_last - 1] == tkfield) ZCODE[zcode_last - 1] = opfldref;
+  if (ZCODE[TT.zcode_last - 1] == tkvar) ZCODE[TT.zcode_last-1] = opvarref;
+  else if (ZCODE[TT.zcode_last - 1] == opmap) ZCODE[TT.zcode_last - 1] = opmapref;
+  else if (ZCODE[TT.zcode_last - 1] == tkfield) ZCODE[TT.zcode_last - 1] = opfldref;
   else error_exit("bad lvalue?");
 }
 
@@ -662,7 +663,7 @@ static int primary(void)
       break;
 
     case tknumber:
-      gen2cd(tknumber, make_literal_num_val(scs->numval));
+      gen2cd(tknumber, make_literal_num_val(TT.scs->numval));
       scan();
       break;
 
@@ -708,14 +709,14 @@ static int primary(void)
 
     case tklparen:
       scan();
-      cgl.paren_level++;
+      TT.cgl.paren_level++;
       int num_exprs = 0;
       do {
         expr();
         num_exprs++;
       } while (have_comma());
       expect(tkrparen);
-      cgl.paren_level--;
+      TT.cgl.paren_level--;
       if (num_exprs > 1) return num_exprs;
       break;
 
@@ -754,7 +755,7 @@ static void binary_op(int optor)  // Also for ternary ?: optor.
   int rbp = getrbp(optor);
   if (optor != tkcat) scan();
   // curtok() holds first token of right operand.
-  int cdx = 0;  // index in zcode list
+  int cdx = 0;  // index in TT.zcode list
   switch (optor) {
     case tkin:
       // right side of 'in' must be (only) an array name
@@ -784,28 +785,28 @@ static void binary_op(int optor)  // Also for ternary ?: optor.
   case tkor:
       optional_nl();
       gen2cd(optor, -1);  // tkand: jump if false, else drop
-      cdx = zcode_last;   // tkor:  jump if true, else drop
+      cdx = TT.zcode_last;   // tkor:  jump if true, else drop
       exprn(rbp);
-      gencd(opnotnot);    // replace stack top with truth value
-      ZCODE[cdx] = zcode_last - cdx;
+      gencd(opnotnot);    // replace TT.stack top with truth value
+      ZCODE[cdx] = TT.zcode_last - cdx;
       break;
 
   case tkternif:
       gen2cd(optor, -1);
-      cdx = zcode_last;
+      cdx = TT.zcode_last;
       expr();
       expect(tkternelse);
       gen2cd(tkternelse, -1);
-      ZCODE[cdx] = zcode_last - cdx;
-      cdx = zcode_last;
+      ZCODE[cdx] = TT.zcode_last - cdx;
+      cdx = TT.zcode_last;
       exprn(rbp);
-      ZCODE[cdx] = zcode_last - cdx;
+      ZCODE[cdx] = TT.zcode_last - cdx;
       break;
 
   case tkmatchop:
   case tknotmatch:
       exprn(rbp);
-      if (ZCODE[zcode_last - 1] == opmatchrec) ZCODE[zcode_last - 1] = tkregex;
+      if (ZCODE[TT.zcode_last - 1] == opmatchrec) ZCODE[TT.zcode_last - 1] = tkregex;
       gencd(optor);
       break;
 
@@ -831,14 +832,14 @@ static char asgnops[] = {tkpowasgn, tkmodasgn, tkmulasgn, tkdivasgn, tkaddasgn,
 
 static void exprn(int rbp)
 {
-  // On entry: scs has first symbol of expression, e.g. var, number, string,
+  // On entry: TT.scs has first symbol of expression, e.g. var, number, string,
   // regex, func, getline, left paren, prefix op ($ ++ -- ! unary + or -) etc.
   static int lev;
   lev++;
   int opnd_st = primary();
-  if (lev == 1 && cgl.pstate < 0
+  if (lev == 1 && TT.cgl.pstate < 0
           && opnd_st > 0 && strchr(printexprendsy, curtok())) {
-      cgl.pstate = opnd_st;
+      TT.cgl.pstate = opnd_st;
       lev--;
       return;
   }
@@ -885,18 +886,18 @@ static void exprn(int rbp)
 
 static void print_stmt(int tk)
 {
-  cgl.in_print_stmt++;
-  cgl.pstate = -1;
+  TT.cgl.in_print_stmt++;
+  TT.cgl.pstate = -1;
   int num_exprs = 0;
   expect(tk); // tkprint or tkprintf
   if ((tk == tkprintf) || !strchr(printexprendsy, curtok())) {
     // printf always needs expression
     // print non-empty statement needs expression
     expr();
-    if (cgl.pstate > 0) {
-      num_exprs = cgl.pstate;
+    if (TT.cgl.pstate > 0) {
+      num_exprs = TT.cgl.pstate;
     } else {
-      cgl.pstate = 0;
+      TT.cgl.pstate = 0;
       for (num_exprs++; have_comma(); num_exprs++)
         expr();
     }
@@ -909,7 +910,7 @@ static void print_stmt(int tk)
   }
   gen2cd(tk, num_exprs);
   gencd(outmode);
-  cgl.in_print_stmt--;
+  TT.cgl.in_print_stmt--;
 }
 
 static void delete_stmt(void)
@@ -983,7 +984,7 @@ static void if_stmt(void)
   expr();
   rparen();
   gen2cd(tkif, -1);
-  int cdx = zcode_last;
+  int cdx = TT.zcode_last;
   stmt();
   if (!prev_was_terminated() && is_nl_semi()) {
     scan();
@@ -993,25 +994,25 @@ static void if_stmt(void)
     optional_nl();
     if (havetok(tkelse)) {
       gen2cd(tkelse, -1);
-      ZCODE[cdx] = zcode_last - cdx;
-      cdx = zcode_last;
+      ZCODE[cdx] = TT.zcode_last - cdx;
+      cdx = TT.zcode_last;
       optional_nl();
       stmt();
     }
   }
-  ZCODE[cdx] = zcode_last - cdx;
+  ZCODE[cdx] = TT.zcode_last - cdx;
 }
 
 static void save_break_continue(int *brk, int *cont)
 {
-  *brk = cgl.break_dest;
-  *cont = cgl.continue_dest;
+  *brk = TT.cgl.break_dest;
+  *cont = TT.cgl.continue_dest;
 }
 
 static void restore_break_continue(int *brk, int *cont)
 {
-  cgl.break_dest = *brk;
-  cgl.continue_dest = *cont;
+  TT.cgl.break_dest = *brk;
+  TT.cgl.continue_dest = *cont;
 }
 
 static void while_stmt(void)
@@ -1020,16 +1021,16 @@ static void while_stmt(void)
   save_break_continue(&brk, &cont);
   expect(tkwhile);
   expect(tklparen);
-  cgl.continue_dest = zcode_last + 1;
+  TT.cgl.continue_dest = TT.zcode_last + 1;
   expr();
   rparen();
   gen2cd(tkwhile, 2);    // drop, jump if true
-  cgl.break_dest = zcode_last + 1;
+  TT.cgl.break_dest = TT.zcode_last + 1;
   gen2cd(opjump, -1);     // jump here to break
   stmt();
   gen2cd(opjump, -1);     // jump to continue
-  ZCODE[zcode_last] = cgl.continue_dest - zcode_last - 1;
-  ZCODE[cgl.break_dest + 1] = zcode_last - cgl.break_dest - 1;
+  ZCODE[TT.zcode_last] = TT.cgl.continue_dest - TT.zcode_last - 1;
+  ZCODE[TT.cgl.break_dest + 1] = TT.zcode_last - TT.cgl.break_dest - 1;
   restore_break_continue(&brk, &cont);
 }
 
@@ -1040,9 +1041,9 @@ static void do_stmt(void)
   expect(tkdo);
   optional_nl();
   gen2cd(opjump, 4);   // jump over jumps, to statement
-  cgl.continue_dest = zcode_last + 1;
+  TT.cgl.continue_dest = TT.zcode_last + 1;
   gen2cd(opjump, -1);   // here on continue
-  cgl.break_dest = zcode_last + 1;
+  TT.cgl.break_dest = TT.zcode_last + 1;
   gen2cd(opjump, -1);   // here on break
   stmt();
   if (!prev_was_terminated()) {
@@ -1054,20 +1055,20 @@ static void do_stmt(void)
       // FIXME
     }
   }
-  ZCODE[cgl.continue_dest + 1] = zcode_last - cgl.continue_dest - 1;
+  ZCODE[TT.cgl.continue_dest + 1] = TT.zcode_last - TT.cgl.continue_dest - 1;
   expect(tkwhile);
   expect(tklparen);
   expr();
   rparen();
-  gen2cd(tkwhile, cgl.break_dest - zcode_last - 1);
-  ZCODE[cgl.break_dest + 1] = zcode_last - cgl.break_dest - 1;
+  gen2cd(tkwhile, TT.cgl.break_dest - TT.zcode_last - 1);
+  ZCODE[TT.cgl.break_dest + 1] = TT.zcode_last - TT.cgl.break_dest - 1;
   restore_break_continue(&brk, &cont);
 }
 
 static void for_not_map_iter(void)
 {
   // Here after loop initialization, if any; loop condition
-  int condition_loc = zcode_last + 1;
+  int condition_loc = TT.zcode_last + 1;
   if (havetok(tksemi)) {
     // "endless" loop variant; no condition
     // no NL allowed here in OTA
@@ -1079,16 +1080,16 @@ static void for_not_map_iter(void)
     gen2cd(tkwhile, -1);    // drop, jump to statement if true
   }
   optional_nl();                    // NOT posix or awk book; in OTA
-  cgl.break_dest = zcode_last + 1;
+  TT.cgl.break_dest = TT.zcode_last + 1;
   gen2cd(opjump, -1);
-  cgl.continue_dest = zcode_last + 1;
+  TT.cgl.continue_dest = TT.zcode_last + 1;
   if (!istok(tkrparen)) simple_stmt();  // "increment"
-  gen2cd(opjump, condition_loc - zcode_last - 3);
+  gen2cd(opjump, condition_loc - TT.zcode_last - 3);
   rparen();
-  ZCODE[cgl.break_dest - 1] = zcode_last - cgl.break_dest + 1;
+  ZCODE[TT.cgl.break_dest - 1] = TT.zcode_last - TT.cgl.break_dest + 1;
   stmt();
-  gen2cd(opjump, cgl.continue_dest - zcode_last - 3);
-  ZCODE[cgl.break_dest + 1] = zcode_last - cgl.break_dest - 1;
+  gen2cd(opjump, TT.cgl.continue_dest - TT.zcode_last - 3);
+  ZCODE[TT.cgl.break_dest + 1] = TT.zcode_last - TT.cgl.break_dest - 1;
 }
 
 static int valid_for_array_iteration(int first, int last)
@@ -1108,7 +1109,7 @@ static void for_stmt(void)
     // No "initialization" part
     for_not_map_iter();
   } else {
-    int loop_start_loc = zcode_last + 1;
+    int loop_start_loc = TT.zcode_last + 1;
     simple_stmt();  // initializaton part, OR varname in arrayname form
     if (!havetok(tkrparen)) {
       expect(tksemi);
@@ -1116,25 +1117,25 @@ static void for_stmt(void)
     } else {
       // Must be map iteration
       // Check here for varname in varname!
-      // FIXME TODO must examine generated zcode for var in array?
-      if (!valid_for_array_iteration(loop_start_loc, zcode_last))
+      // FIXME TODO must examine generated TT.zcode for var in array?
+      if (!valid_for_array_iteration(loop_start_loc, TT.zcode_last))
         xerr("%s", "bad 'for (var in array)' loop\n");
       else {
-        ZCODE[zcode_last-5] = opvarref;
-        ZCODE[zcode_last-1] = tknumber;
-        ZCODE[zcode_last] = make_literal_num_val(-1);
-        cgl.continue_dest = zcode_last + 1;
+        ZCODE[TT.zcode_last-5] = opvarref;
+        ZCODE[TT.zcode_last-1] = tknumber;
+        ZCODE[TT.zcode_last] = make_literal_num_val(-1);
+        TT.cgl.continue_dest = TT.zcode_last + 1;
         gen2cd(opmapiternext, 2);
-        cgl.break_dest = zcode_last + 1;
+        TT.cgl.break_dest = TT.zcode_last + 1;
         gen2cd(opjump, -1);   // fill in with loc after stmt
       }
       optional_nl();
-      // fixup stack if return or exit inside for (var in array)
-      cgl.stack_offset_to_fix += 3;
+      // fixup TT.stack if return or exit inside for (var in array)
+      TT.cgl.stack_offset_to_fix += 3;
       stmt();
-      cgl.stack_offset_to_fix -= 3;
-      gen2cd(opjump, cgl.continue_dest - zcode_last - 3);
-      ZCODE[cgl.break_dest + 1] = zcode_last - cgl.break_dest - 1;
+      TT.cgl.stack_offset_to_fix -= 3;
+      gen2cd(opjump, TT.cgl.continue_dest - TT.zcode_last - 3);
+      ZCODE[TT.cgl.break_dest + 1] = TT.zcode_last - TT.cgl.break_dest - 1;
       gencd(opdrop);
       gencd(opdrop);
       gencd(opdrop);
@@ -1151,29 +1152,29 @@ static void stmt(void)
 
     case tkbreak:
       scan();
-      if (cgl.break_dest) gen2cd(tkbreak, cgl.break_dest - zcode_last - 3);
+      if (TT.cgl.break_dest) gen2cd(tkbreak, TT.cgl.break_dest - TT.zcode_last - 3);
       else xerr("%s", "break not in a loop\n");
       break;
 
     case tkcontinue:
       scan();
-      if (cgl.continue_dest)
-        gen2cd(tkcontinue, cgl.continue_dest - zcode_last - 3);
+      if (TT.cgl.continue_dest)
+        gen2cd(tkcontinue, TT.cgl.continue_dest - TT.zcode_last - 3);
       else xerr("%s", "continue not in a loop\n");
       break;
 
     case tknext:
       scan();
       gencd(tknext);
-      if (cgl.rule_type) xerr("%s", "next inside BEGIN or END\n");
-      if (cgl.in_function_body) xerr("%s", "next inside function def\n");
+      if (TT.cgl.rule_type) xerr("%s", "next inside BEGIN or END\n");
+      if (TT.cgl.in_function_body) xerr("%s", "next inside function def\n");
       break;
 
     case tknextfile:
       scan();
       gencd(tknextfile);
-      if (cgl.rule_type) xerr("%s", "nextfile inside BEGIN or END\n");
-      if (cgl.in_function_body) xerr("%s", "nextfile inside function def\n");
+      if (TT.cgl.rule_type) xerr("%s", "nextfile inside BEGIN or END\n");
+      if (TT.cgl.in_function_body) xerr("%s", "nextfile inside function def\n");
       break;
 
     case tkexit:
@@ -1186,12 +1187,12 @@ static void stmt(void)
 
     case tkreturn:
       scan();
-      if (cgl.stack_offset_to_fix) gen2cd(opdrop_n, cgl.stack_offset_to_fix);
+      if (TT.cgl.stack_offset_to_fix) gen2cd(opdrop_n, TT.cgl.stack_offset_to_fix);
       if (strchr(exprstartsy, curtok())) {
         expr();
       } else gen2cd(tknumber, make_literal_num_val(0.0));
-      gen2cd(tkreturn, cgl.nparms);
-      if (!cgl.in_function_body) xerr("%s", "return not in function\n");
+      gen2cd(tkreturn, TT.cgl.nparms);
+      if (!TT.cgl.in_function_body) xerr("%s", "return not in function\n");
       break;
 
     case tklbrace:
@@ -1226,7 +1227,7 @@ static void add_param(int funcnum, char *s)
 {
   if (!find_local_entry(s)) add_local_entry(s);
   else xerr("function '%s' dup param '%s'\n", FUNC_DEF[funcnum].name, s);
-  cgl.nparms++;
+  TT.cgl.nparms++;
 
   // POSIX: The same name shall not be used as both a function parameter name
   // and as the name of a function or a special awk variable.
@@ -1235,7 +1236,7 @@ static void add_param(int funcnum, char *s)
   if (!strcmp(s, FUNC_DEF[funcnum].name))
     xerr("function '%s' param '%s' matches func name\n",
         FUNC_DEF[funcnum].name, s);
-  if (find_global(s) && find_global(s) < spec_var_limit)
+  if (find_global(s) && find_global(s) < TT.spec_var_limit)
     xerr("function '%s' param '%s' matches special var\n",
         FUNC_DEF[funcnum].name, s);
 }
@@ -1257,9 +1258,9 @@ static void function_def(void)
   }
 
   gen2cd(tkfunction, funcnum);
-  FUNC_DEF[funcnum].zcode_addr = zcode_last - 1;
-  cgl.funcnum = funcnum;
-  cgl.nparms = 0;
+  FUNC_DEF[funcnum].zcode_addr = TT.zcode_last - 1;
+  TT.cgl.funcnum = funcnum;
+  TT.cgl.nparms = 0;
   if (istok(tkfunc)) expect(tkfunc); // func name with no space before (
   else expect(tkvar);  // func name with space before (
   expect(tklparen);
@@ -1274,12 +1275,12 @@ static void function_def(void)
   }
   rparen();
   if (istok(tklbrace)) {
-    cgl.in_function_body = 1;
+    TT.cgl.in_function_body = 1;
     action(tkfunc);
-    cgl.in_function_body = 0;
+    TT.cgl.in_function_body = 0;
     // Need to return uninit value if falling off end of function.
     gen2cd(tknumber, make_uninit_val());
-    gen2cd(tkreturn, cgl.nparms);
+    gen2cd(tkreturn, TT.cgl.nparms);
   } else {
     xerr("syntax near '%s'\n", tokstr);
     // FIXME some recovery needed here!?
@@ -1287,7 +1288,7 @@ static void function_def(void)
   // Do not re-init locals table for dup function.
   // Avoids memory leak detected by LeakSanitizer.
   if (!FUNC_DEF[funcnum].function_locals.base) {
-    FUNC_DEF[funcnum].function_locals = locals_table;
+    FUNC_DEF[funcnum].function_locals = TT.locals_table;
     init_locals_table();
   }
 }
@@ -1335,80 +1336,80 @@ static void rule(void)
   switch (curtok()) {
     case tkbegin:
       scan();
-      if (cgl.last_begin) ZCODE[cgl.last_begin] = zcode_last - cgl.last_begin;
-      else cgl.first_begin = zcode_last + 1;
+      if (TT.cgl.last_begin) ZCODE[TT.cgl.last_begin] = TT.zcode_last - TT.cgl.last_begin;
+      else TT.cgl.first_begin = TT.zcode_last + 1;
 
-      cgl.rule_type = tkbegin;
+      TT.cgl.rule_type = tkbegin;
       action(tkbegin);
-      cgl.rule_type = 0;
+      TT.cgl.rule_type = 0;
       gen2cd(opjump, -1);
-      cgl.last_begin = zcode_last;
+      TT.cgl.last_begin = TT.zcode_last;
       break;
 
     case tkend:
       scan();
-      if (cgl.last_end) ZCODE[cgl.last_end] = zcode_last - cgl.last_end;
-      else cgl.first_end = zcode_last + 1;
+      if (TT.cgl.last_end) ZCODE[TT.cgl.last_end] = TT.zcode_last - TT.cgl.last_end;
+      else TT.cgl.first_end = TT.zcode_last + 1;
 
-      cgl.rule_type = tkbegin;
+      TT.cgl.rule_type = tkbegin;
       action(tkend);
-      cgl.rule_type = 0;
+      TT.cgl.rule_type = 0;
       gen2cd(opjump, -1);
-      cgl.last_end = zcode_last;
+      TT.cgl.last_end = TT.zcode_last;
       break;
 
     case tklbrace:
-      if (cgl.last_recrule)
-        ZCODE[cgl.last_recrule] = zcode_last - cgl.last_recrule;
-      else cgl.first_recrule = zcode_last + 1;
+      if (TT.cgl.last_recrule)
+        ZCODE[TT.cgl.last_recrule] = TT.zcode_last - TT.cgl.last_recrule;
+      else TT.cgl.first_recrule = TT.zcode_last + 1;
       action(tkdo);
       gen2cd(opjump, -1);
-      cgl.last_recrule = zcode_last;
+      TT.cgl.last_recrule = TT.zcode_last;
       break;
 
     case tkfunction:
       function_def();
       break;
     default:
-      if (cgl.last_recrule)
-        ZCODE[cgl.last_recrule] = zcode_last - cgl.last_recrule;
-      else cgl.first_recrule = zcode_last + 1;
+      if (TT.cgl.last_recrule)
+        ZCODE[TT.cgl.last_recrule] = TT.zcode_last - TT.cgl.last_recrule;
+      else TT.cgl.first_recrule = TT.zcode_last + 1;
       gen2cd(opjump, 1);
       gencd(tkeof);
-      int cdx = 0, saveloc = zcode_last;
+      int cdx = 0, saveloc = TT.zcode_last;
       expr();
       if (!have_comma()) {
         gen2cd(tkif, -1);
-        cdx = zcode_last;
+        cdx = TT.zcode_last;
       } else {
-        gen2cd(oprange2, ++cgl.range_pattern_num);
+        gen2cd(oprange2, ++TT.cgl.range_pattern_num);
         gencd(-1);
-        cdx = zcode_last;
+        cdx = TT.zcode_last;
         ZCODE[saveloc-2] = oprange1;
-        ZCODE[saveloc-1] = cgl.range_pattern_num;
-        ZCODE[saveloc] = zcode_last - saveloc;
+        ZCODE[saveloc-1] = TT.cgl.range_pattern_num;
+        ZCODE[saveloc] = TT.zcode_last - saveloc;
         expr();
-        gen2cd(oprange3, cgl.range_pattern_num);
+        gen2cd(oprange3, TT.cgl.range_pattern_num);
       }
       if (istok(tklbrace)) {
         action(tkif);
-        ZCODE[cdx] = zcode_last - cdx;
+        ZCODE[cdx] = TT.zcode_last - cdx;
       } else {
         gencd(opprintrec);   // print $0 ?
-        ZCODE[cdx] = zcode_last - cdx;
+        ZCODE[cdx] = TT.zcode_last - cdx;
       }
       gen2cd(opjump, -1);
-      cgl.last_recrule = zcode_last;
+      TT.cgl.last_recrule = TT.zcode_last;
   }
 }
 
 static void diag_func_def_ref(void)
 {
-  int n = zlist_len(&func_def_table);
+  int n = zlist_len(&TT.func_def_table);
   for (int k = 1; k < n; k++) {
     if ((FUNC_DEF[k].flags & FUNC_CALLED) && !(FUNC_DEF[k].flags & FUNC_DEFINED)) {
       fprintf(stderr, "function '%s' not defined\n", FUNC_DEF[k].name);
-      cgl.compile_error_count++;
+      TT.cgl.compile_error_count++;
     }
   }
 }
@@ -1426,18 +1427,18 @@ EXTERN void compile(void)
 
   // TEMP FIXME put BEGIN and END together
 
-  if (cgl.last_begin) ZCODE[cgl.last_begin-1] = opquit;
-  if (cgl.last_end) ZCODE[cgl.last_end-1] = opquit;
-  if (cgl.last_recrule) ZCODE[cgl.last_recrule-1] = opquit;
+  if (TT.cgl.last_begin) ZCODE[TT.cgl.last_begin-1] = opquit;
+  if (TT.cgl.last_end) ZCODE[TT.cgl.last_end-1] = opquit;
+  if (TT.cgl.last_recrule) ZCODE[TT.cgl.last_recrule-1] = opquit;
 
   gen2cd(tknumber, make_literal_num_val(123.0)); // FIXME TEMP for dev. s/b exit 0
   gencd(tkexit);
   gencd(opquit);
   // If there are only BEGIN and END or only END actions, generate actions to
   // read all input before END.
-  if (cgl.first_end && !cgl.first_recrule) {
+  if (TT.cgl.first_end && !TT.cgl.first_recrule) {
     gencd(opquit);
-    cgl.first_recrule = zcode_last;
+    TT.cgl.first_recrule = TT.zcode_last;
   }
   diag_func_def_ref();
 }

@@ -1,5 +1,6 @@
 // common.h
-// Copyright 2023 Ray Gardner
+// Copyright 2024 Ray Gardner
+// License: 0BSD
 // vi: tabstop=2 softtabstop=2 shiftwidth=2
 
 ////////////////////
@@ -60,6 +61,7 @@
 ////   declarations
 ////////////////////
 
+#ifndef FOR_TOYBOX
 struct scanner_state {
     char *p;
     char *progstring;
@@ -88,6 +90,101 @@ struct scanner_state {
     int error;  // Set if lexical error.
 };
 
+struct compiler_globals {
+  int in_print_stmt;
+  int in_function_body;
+  int pstate;
+  int paren_level;
+  int funcnum;
+  int nparms;
+  int compile_error_count;
+  int first_begin;
+  int last_begin;
+  int first_end;
+  int last_end;
+  int first_recrule;
+  int last_recrule;
+  int break_dest;
+  int continue_dest;
+  int stack_offset_to_fix;  // fixup stack if return in for(e in a)
+  int range_pattern_num;
+  int rule_type;  // tkbegin, tkend, or 0
+};
+
+// zvalue: the main awk value type
+// Can be number or string or both, or else map (array) or regex
+struct zvalue {
+  unsigned flags;
+  double num;
+  union { // anonymous union not in C99; not going to fix it now.
+    struct zstring *vst;
+    struct zmap *map;
+    regex_t *rx;
+  };
+};
+
+struct runtime_globals {
+  struct zvalue cur_arg;
+  FILE *fp;           // current data file
+  int narg;           // cmdline arg index
+  int nfiles;         // num of cmdline data file args processed
+  int eof;            // all cmdline files (incl. stdin) read
+  char *recbuf;
+  size_t recbufsize;
+  char *recbuf_multiline;
+  size_t recbufsize_multiline;
+  struct zstring *zspr;      // Global to receive sprintf() string value
+};
+
+// zlist: expanding sequential list
+struct zlist {
+  char *base, *limit, *avail;
+  size_t size;
+};
+
+struct zfile {
+  struct zstring *fn;
+  FILE *fp;
+  char mode;  // w, a, or r
+  char file_or_pipe;  // f or p
+};
+
+// Global data
+struct global_data {
+  struct scanner_state *scs;
+  struct zlist globals_table;      // global symbol table
+  struct zlist locals_table;       // local symbol table
+  struct zlist func_def_table;     // function symbol table
+
+  struct zlist literals;
+  struct zlist fields;
+  struct zlist zcode;
+  struct zlist stack;
+  char *progname;
+  struct compiler_globals cgl;
+  int spec_var_limit;              // used in compile.c and run.c
+  int zcode_last;                  // used in common.c and compile.c
+  int stkptr;      // used in run.c and (once) in compile.c
+
+  struct runtime_globals rgl;
+
+  regex_t rx_default;
+  regex_t rx_last;
+  regex_t rx_multiline;
+#define FS_MAX  128
+  char fs_last[FS_MAX];
+  char one_char_fs[4];
+  int nf_internal;  // should match NF
+  char range_sw[64];   // FIXME TODO quick and dirty set of range switches
+  int file_cnt, std_file_cnt;
+  // TODO FIXME This is set pretty high (1010) to pass T.overflow test of 1000
+  // open files; files[] is 24240 bytes. Maybe should be allocated dynamically?
+#define MAX_FILES 1010
+  struct zfile files[MAX_FILES];
+  regex_t rx_printf_fmt;
+};
+#endif  // FOR_TOYBOX
+// END global variables
 enum Toktypes {
     // EOF (use -1 from stdio.h)
     ERROR = 2, NEWLINE, VAR, NUMBER, STRING, REGEX, USERFUNC, BUILTIN, TOKEN,
@@ -141,12 +238,6 @@ enum Opcodes {
 enum spec_var_names { ARGC=1, ARGV, CONVFMT, ENVIRON, FILENAME, FNR, FS, NF,
     NR, OFMT, OFS, ORS, RLENGTH, RS, RSTART, SUBSEP };
 
-// zlist: expanding sequential list
-struct zlist {
-  char *base, *limit, *avail;
-  size_t size;
-};
-
 struct symtab_slot {    // global symbol table entry
   unsigned flags;
   int slotnum;
@@ -162,12 +253,6 @@ struct zstring {
   char str[];   // C99 flexible array member
 };
 
-// struct zmap; Forward declaration apparently not needed to avoid
-// problem with zvalue and zmap referencing each other.
-
-// zvalue: the main awk value type
-// Can be number or string or both, or else map (array) or regex
-
 // Flag bits for zvalue and symbol tables
 #define ZF_MAYBEMAP (1u << 1)
 #define ZF_MAP      (1u << 2)
@@ -181,15 +266,6 @@ struct zstring {
 #define ZF_FIELDREF (1u << 11)  // for lvalues
 #define ZF_EMPTY_RX (1u << 12)
 #define ZF_ANYMAP   (ZF_MAP | ZF_MAYBEMAP)
-struct zvalue {
-  unsigned flags;
-  double num;
-  union { // anonymous union not in C99; not going to fix it now.
-    struct zstring *vst;
-    struct zmap *map;
-    regex_t *rx;
-  };
-};
 
 // Macro to help facilitate possible future change in zvalue layout.
 #define ZVINIT(flags, num, ptr) {(flags), (double)(num), {(ptr)}}
@@ -200,15 +276,15 @@ struct zvalue {
 #define is_map(zvalp) ((zvalp)->flags & ZF_MAP)
 #define is_empty_rx(zvalp) ((zvalp)->flags & ZF_EMPTY_RX)
 
-#define GLOBAL      ((struct symtab_slot *)globals_table.base)
-#define LOCAL       ((struct symtab_slot *)locals_table.base)
-#define FUNC_DEF    ((struct functab_slot *)func_def_table.base)
+#define GLOBAL      ((struct symtab_slot *)TT.globals_table.base)
+#define LOCAL       ((struct symtab_slot *)TT.locals_table.base)
+#define FUNC_DEF    ((struct functab_slot *)TT.func_def_table.base)
 
-#define LITERAL     ((struct zvalue *)literals.base)
-#define STACK       ((struct zvalue *)stack.base)
-#define FIELD       ((struct zvalue *)fields.base)
+#define LITERAL     ((struct zvalue *)TT.literals.base)
+#define STACK       ((struct zvalue *)TT.stack.base)
+#define FIELD       ((struct zvalue *)TT.fields.base)
 
-#define ZCODE       ((int *)zcode.base)
+#define ZCODE       ((int *)TT.zcode.base)
 
 #define FUNC_DEFINED    (1u)
 #define FUNC_CALLED     (2u)
@@ -249,37 +325,17 @@ struct zmap {
 #define fatal(...) zzfatal(__FILE__, __LINE__, "%s\n", __VA_ARGS__)
 #define xerr(format, ...) zzerr(__FILE__, __LINE__, format, __VA_ARGS__)
 
-struct compiler_globals {
-  int in_print_stmt;
-  int in_function_body;
-  int pstate;
-  int paren_level;
-  int funcnum;
-  int nparms;
-  int compile_error_count;
-  int first_begin;
-  int last_begin;
-  int first_end;
-  int last_end;
-  int first_recrule;
-  int last_recrule;
-  int break_dest;
-  int continue_dest;
-  int stack_offset_to_fix;  // fixup stack if return in for(e in a)
-  int range_pattern_num;
-  int rule_type;  // tkbegin, tkend, or 0
-};
-
 #define NO_EXIT_STATUS  (9999987)  // value unlikely to appear in exit stmt
 
 ssize_t getline(char **lineptr, size_t *n, FILE *stream);
 ssize_t getdelim(char ** restrict lineptr, size_t * restrict n, int delimiter, FILE *stream);
 
 #define EXTERN extern
+#ifndef FOR_TOYBOX
 
 // Common (global) data
-
-EXTERN struct scanner_state *scs;
+EXTERN struct global_data TT;
+#endif  // FOR_TOYBOX
 
 // Forward ref declarations
 EXTERN struct zvalue *val_to_str(struct zvalue *v);
@@ -303,20 +359,6 @@ EXTERN void dump_zstringx(char *label, struct zstring *s);
 EXTERN void dumpstrx(char *s, int n);
 EXTERN void dumpstr(char *s);
 EXTERN void dump_zvalue(char *label, struct zvalue *v);
-
-EXTERN int last_global;    // set in run.h; used only for dump_stack() info.
-EXTERN int spec_var_limit; // used in compile.h and run.h
-EXTERN int stkptr;         // used in run.h and (once) in compile.h (& dumputils.h)
-EXTERN int zcode_last;     // used in common.h and compile.h
-
-EXTERN struct zlist globals_table;  // global symbol table
-EXTERN struct zlist locals_table;  // local symbol table
-EXTERN struct zlist func_def_table;  // function symbol table
-
-EXTERN struct zlist literals;
-EXTERN struct zlist fields;
-EXTERN struct zlist zcode;
-EXTERN struct zlist stack;
 
 EXTERN struct zvalue uninit_zvalue;
 EXTERN struct zvalue uninit_string_zvalue;
