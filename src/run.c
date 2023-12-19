@@ -4,7 +4,7 @@
 
 #include "common.h"
 
-static void check_numeric_string(zvalue *v)
+static void check_numeric_string(struct zvalue *v)
 {
   if (v->vst) {
     char *end, *s = v->vst->str;
@@ -23,7 +23,7 @@ static void check_numeric_string(zvalue *v)
 enum {pbufsize = 512};
 static char pbuf[pbufsize];
 
-static zstring *num_to_zstring(double n, char *fmt)
+static struct zstring *num_to_zstring(double n, char *fmt)
 {
   int k;
   if (n == (long long)n) k = snprintf(pbuf, pbufsize, "%lld", (long long)n);
@@ -79,7 +79,7 @@ static void rx_compile_or_die(regex_t *rx, char *pat)
   if (rx_compile(rx, pat)) fatal("bad regex\n");
 }
 
-static void rx_zvalue_compile(regex_t **rx, zvalue *pat)
+static void rx_zvalue_compile(regex_t **rx, struct zvalue *pat)
 {
   if (is_rx(pat)) *rx = pat->rx;
   else {
@@ -90,13 +90,13 @@ static void rx_zvalue_compile(regex_t **rx, zvalue *pat)
   }
 }
 
-static void rx_zvalue_free(regex_t *rx, zvalue *pat)
+static void rx_zvalue_free(regex_t *rx, struct zvalue *pat)
 {
   if (!is_rx(pat) || rx != pat->rx) regfree(rx);
 }
 
 // Used by the match/not match ops (~ !~) and implicit $0 match (/regex/)
-static int match(zvalue *zvsubject, zvalue *zvpat)
+static int match(struct zvalue *zvsubject, struct zvalue *zvpat)
 {
   int r;
   regex_t rx, *rxp = &rx;
@@ -177,7 +177,7 @@ static void free_field_rx(void)
   regfree(&rx_multiline);
 }
 
-static int get_int_val(zvalue *v)
+static int get_int_val(struct zvalue *v)
 {
   if (is_num(v)) return (int)v->num;
   if (is_str(v) && v->vst) return (int)str_to_num(v->vst->str);
@@ -203,18 +203,18 @@ static regex_t *rx_prep(char *fs)
 }
 
 // Only for use by split() builtin
-static void set_map_element(zmap *m, int k, char *val, size_t len)
+static void set_map_element(struct zmap *m, int k, char *val, size_t len)
 {
   // Do not need format here b/c k is integer, uses "%lld" format.
-  zstring *key = num_to_zstring(k, 0);
-  zmapslot *zs = zmap_find_or_insert_key(m, key);
+  struct zstring *key = num_to_zstring(k, 0);
+  struct zmap_slot *zs = zmap_find_or_insert_key(m, key);
   zstring_release(&key);
   zs->val.vst = zstring_update(zs->val.vst, 0, val, len);
   zs->val.flags = ZF_STR;
   check_numeric_string(&zs->val);
 }
 
-static void set_zvalue_str(zvalue *v, char *s, size_t size)
+static void set_zvalue_str(struct zvalue *v, char *s, size_t size)
 {
   v->vst = zstring_update(v->vst, 0, s, size);
   v->flags = ZF_STR;
@@ -229,7 +229,7 @@ static void set_nf(int nf)
   STACK[NF].flags = ZF_NUM;
 }
 
-static void set_field(zmap *unused, int fnum, char *s, size_t size)
+static void set_field(struct zmap *unused, int fnum, char *s, size_t size)
 { (void)unused;
   if (fnum < 0 || fnum > FIELDS_MAX) ffatal("bad field num %d\n", fnum);
   int nfields = zlist_len(&fields);
@@ -244,9 +244,8 @@ static void set_field(zmap *unused, int fnum, char *s, size_t size)
 // Split s via fs, using setter; return number of fields.
 // This is used to split fields and also for split() builtin.
 
-typedef void (*fsetter_t)(zmap *, int, char *, size_t);
 
-static int splitter(fsetter_t setter, zmap *m, char *s, zvalue *zvfs)
+static int splitter(void (*setter)(struct zmap *, int, char *, size_t), struct zmap *m, char *s, struct zvalue *zvfs)
 {
   regex_t *rx;
   regoff_t offs, end;
@@ -295,10 +294,10 @@ static void build_fields(void)
 
 static void rebuild_field0(void)
 {
-  zstring *s = FIELD[0].vst;
+  struct zstring *s = FIELD[0].vst;
   int nf = nf_internal;
   // uninit value needed for eventual reference to .vst in zstring_release()
-  zvalue tempv = uninit_zvalue;
+  struct zvalue tempv = uninit_zvalue;
   zvalue_copy(&tempv, &STACK[OFS]);
   val_to_str(&tempv);
   for (int i = 1; i <= nf; i++) {
@@ -322,7 +321,7 @@ static void rebuild_field0(void)
 // uninitialized value; and cause the value of $0 to be recomputed, with the
 // fields being separated by the value of OFS.]
 // Called by run:setup_lvalue()
-static zvalue *get_field_ref(int fnum)
+static struct zvalue *get_field_ref(int fnum)
 {
   if (fnum < 0 || fnum > FIELDS_MAX) error_exit("bad field num %d\n", fnum);
   if (fnum > nf_internal) {
@@ -338,7 +337,7 @@ static zvalue *get_field_ref(int fnum)
 }
 
 // Called by tksplit op in run
-static int split(zstring *s, zvalue *a, zvalue *fs)
+static int split(struct zstring *s, struct zvalue *a, struct zvalue *fs)
 {
   return splitter(set_map_element, a->map, s->str, fs);
 }
@@ -392,7 +391,7 @@ static void push_field(int fnum)
 ////////////////////
 
 static struct runtime_globals {
-  zvalue cur_arg;
+  struct zvalue cur_arg;
   FILE *fp;           // current data file
   int narg;           // cmdline arg index
   int nfiles;         // num of cmdline data file args processed
@@ -401,7 +400,7 @@ static struct runtime_globals {
   size_t recbufsize;
   char *recbuf_multiline;
   size_t recbufsize_multiline;
-  zstring *zspr;      // Global to receive sprintf() string value
+  struct zstring *zspr;      // Global to receive sprintf() string value
 } rgl;
 
 #define STKP    (&STACK[stkptr])
@@ -435,7 +434,7 @@ static unsigned seed_jkiss32(unsigned n)
 }
 // END Random number generator
 
-static void check_not_map(zvalue *v)
+static void check_not_map(struct zvalue *v)
 {
   if (is_map(v)) fatal("array in scalar context");
 }
@@ -444,14 +443,14 @@ static void check_not_map(zvalue *v)
 
 static int popnumval(void)
 {
-  stack.avail -= sizeof(zvalue);
+  stack.avail -= sizeof(struct zvalue);
   return STACK[stkptr--].num;
 }
 
 static void drop(void)
 {
-  stack.avail -= sizeof(zvalue);
-  zvalue *v = &STACK[stkptr--];
+  stack.avail -= sizeof(struct zvalue);
+  struct zvalue *v = &STACK[stkptr--];
   zvalue_release_zstring(v);
 }
 
@@ -462,12 +461,12 @@ static void drop_n(int n)
 
 static void swap(void)
 {
-  zvalue tmp = STKP[-1];
+  struct zvalue tmp = STKP[-1];
   STKP[-1] = STKP[0];
   STKP[0] = tmp;
 }
 
-static void force_maybemap_to_scalar(zvalue *v)
+static void force_maybemap_to_scalar(struct zvalue *v)
 {
   if (v->flags & ZF_MAYBEMAP) {
     v->flags = 0;
@@ -476,7 +475,7 @@ static void force_maybemap_to_scalar(zvalue *v)
   }
 }
 
-static void force_maybemap_to_map(zvalue *v)
+static void force_maybemap_to_map(struct zvalue *v)
 {
   if (v->flags & ZF_MAYBEMAP) v->flags = ZF_MAP;
 }
@@ -484,7 +483,7 @@ static void force_maybemap_to_map(zvalue *v)
 // Set and return logical (0/1) val of top stack value; flag value as NUM.
 static int get_set_logical(void)
 {
-  zvalue *v = STKP;
+  struct zvalue *v = STKP;
   check_not_map(v);
   force_maybemap_to_scalar(v);
   int r = 0;
@@ -497,7 +496,7 @@ static int get_set_logical(void)
 }
 
 
-static zvalue *val_to_str_fmt(zvalue *v, char *fmt)
+static struct zvalue *val_to_str_fmt(struct zvalue *v, char *fmt)
 {
   check_not_map(v);
   force_maybemap_to_scalar(v);
@@ -517,7 +516,7 @@ static zvalue *val_to_str_fmt(zvalue *v, char *fmt)
   return v;
 }
 
-EXTERN zvalue *val_to_str(zvalue *v)
+EXTERN struct zvalue *val_to_str(struct zvalue *v)
 {
   force_maybemap_to_scalar(v);
   // chicken-egg problem here. Need to convert CONVFMT to string
@@ -532,7 +531,7 @@ EXTERN zvalue *val_to_str(zvalue *v)
 }
 #define ensure_str(v) (is_str(v) ? (v) : val_to_str(v))
 
-static double val_to_num(zvalue *v)
+static double val_to_num(struct zvalue *v)
 {
   check_not_map(v);
   force_maybemap_to_scalar(v);
@@ -546,42 +545,42 @@ static double val_to_num(zvalue *v)
   return v->num;
 }
 
-static void set_string(zvalue *v, zstring *zs)
+static void set_string(struct zvalue *v, struct zstring *zs)
 {
   zstring_release(&v->vst);
   v->vst = zs;
   v->flags = ZF_STR;
 }
 
-static void set_num(zvalue *v, double n)
+static void set_num(struct zvalue *v, double n)
 {
   zstring_release(&v->vst);
   v->num = n;
   v->flags = ZF_NUM;
 }
 
-static void incr_zvalue(zvalue *v)
+static void incr_zvalue(struct zvalue *v)
 {
   v->num = trunc(val_to_num(v)) + 1;
 }
 
 static void push_int_val(ptrdiff_t n)
 {
-  zvalue v = ZVINIT(ZF_NUM, n, 0);
+  struct zvalue v = ZVINIT(ZF_NUM, n, 0);
   push_val(&v);
 }
 
-static zvalue *get_map_val(zvalue *v, zvalue *key)
+static struct zvalue *get_map_val(struct zvalue *v, struct zvalue *key)
 {
   val_to_str(key); // FIXME does this work always?
-  zmapslot *x = zmap_find_or_insert_key(v->map, key->vst);
+  struct zmap_slot *x = zmap_find_or_insert_key(v->map, key->vst);
   return &x->val;
 }
 
-static zvalue *setup_lvalue(int n, int parmbase, int *field_num)
+static struct zvalue *setup_lvalue(int n, int parmbase, int *field_num)
 {
   *field_num = -1;
-  zvalue *v = &STACK[n], *vv = v;
+  struct zvalue *v = &STACK[n], *vv = v;
   int k = v->num;
   if (v->flags & ZF_FIELDREF) {
     v = get_field_ref(*field_num = k);
@@ -607,28 +606,28 @@ static zvalue *setup_lvalue(int n, int parmbase, int *field_num)
 // TODO FIXME This is set pretty high (1010) to pass T.overflow test of 1000
 // open files; files[] is 24240 bytes. Maybe should be allocated dynamically?
 #define MAX_FILES 1010
-typedef struct {
-  zstring *fn;
+struct zfile {
+  struct zstring *fn;
   FILE *fp;
   char mode;  // w, a, or r
   char file_or_pipe;  // f or p
-} zfile;
+};
 
 static int file_cnt = 0, std_file_cnt = 0;
 
-static zfile files[MAX_FILES];
+static struct zfile files[MAX_FILES];
 
 
 static void setup_std_file(char *fn, FILE *fp, char *mode)
 {
-  files[file_cnt++] = (zfile){new_zstring(fn, strlen(fn)), fp, *mode, 'f'};
+  files[file_cnt++] = (struct zfile){new_zstring(fn, strlen(fn)), fp, *mode, 'f'};
   std_file_cnt = file_cnt;
 }
 
 static int fflush_all(void)
 {
   for (int k = 0; k < file_cnt; k++) {
-    zfile *zof = &files[k];
+    struct zfile *zof = &files[k];
     if (fflush(zof->fp)) return -1;
   }
   return 0;
@@ -642,7 +641,7 @@ static int fflush_file(int nargs)
   if (!STKP[0].vst->str[0]) return fflush_all();
   // is it open in file table?
   for (int k = 0; k < file_cnt; k++) {
-    zfile *zof = &files[k];
+    struct zfile *zof = &files[k];
     if (zstring_match(STKP[0].vst, zof->fn)) {
       // if (zof->file_or_pipe == 'f' && fflush(zof->fp) == 0)
       //   return 0;  // otherwise assume fail
@@ -658,7 +657,7 @@ static int close_file(void)
   val_to_str(STKP);   // filename at top of stack
   // is it open in file table?
   for (int k = 0; k < file_cnt; k++) {
-    zfile *zof = &files[k];
+    struct zfile *zof = &files[k];
     if (zstring_match(STKP[0].vst, zof->fn)) {
       if (!zof->fp || (zof->file_or_pipe == 'f' ? fclose : pclose)(zof->fp) < 0)
         return -1;  // otherwise assume successful close
@@ -678,7 +677,7 @@ static int close_file(void)
 static FILE *setup_file(char *file_or_pipe, char *mode)
 {
   val_to_str(STKP);   // filename at top of stack
-  zfile *zof = 0;
+  struct zfile *zof = 0;
   // is it already open in file table?
   for (int k = 0; k < file_cnt; k++) {
     zof = &files[k];
@@ -736,12 +735,12 @@ static int fsprintf(FILE *ignored, const char *fmt, ...)
   return 0;
 }
 
-typedef int (*fvar_t)(FILE *, const char *, ...);
+
 
 static regex_t rx_printf_fmt;
 static char *printf_fmt_rx = "%[-+ #0]*([*]|[0-9]*)([.]([*]|[0-9]*))?[aAdiouxXfFeEgGcs%]";
 
-static void varprint(fvar_t fpvar, FILE *outfp, int nargs)
+static void varprint(int(*fpvar)(FILE *, const char *, ...), FILE *outfp, int nargs)
 {
   int k, nn, nnc, fmtc, holdc, cnt1 = 0, cnt2 = 0;
   double n = 0;
@@ -864,7 +863,7 @@ static int assign_global(char *var, char *value)
   if (!is_ok_varname(var)) ffatal("invalid variable name '%s'\n'", var);
   int globals_ent = find_global(var);
   if (globals_ent) {
-    zvalue *v = &STACK[globals_ent];
+    struct zvalue *v = &STACK[globals_ent];
     if (is_map(v)) error_exit("-v assignment to array\n");  // Maybe not needed?
     zvalue_release_zstring(v);
     value = xstrdup(value);
@@ -901,8 +900,8 @@ static char *nextfilearg(void)
   char *arg;
   do {
     if (++rgl.narg >= (int)val_to_num(&STACK[ARGC])) return 0;
-    zvalue *v = &STACK[ARGV];
-    zvalue zkey = ZVINIT(ZF_STR, 0,
+    struct zvalue *v = &STACK[ARGV];
+    struct zvalue zkey = ZVINIT(ZF_STR, 0,
         num_to_zstring(rgl.narg, val_to_str(&STACK[CONVFMT])->vst->str));
     arg = "";
     if (zmap_find(v->map, zkey.vst)) {
@@ -1002,7 +1001,7 @@ static ssize_t getrec_f0(void)
 // fp is file or pipe (is NULL if file/pipe could not be opened)
 // FIXME TODO should -1 return be replaced by test at caller?
 // v is NULL or an lvalue ref
-static int awk_getline(int source, FILE *fp, zvalue *v)
+static int awk_getline(int source, FILE *fp, struct zvalue *v)
 {
   ssize_t k;
   int is_stream = source != tkeof;
@@ -1038,9 +1037,9 @@ static void gsub(int opcode, int nargs, int parmbase)
 { (void)nargs;
   int field_num = -1;
   // compile ensures 3 args
-  zvalue *v = setup_lvalue(stkptr, parmbase, &field_num);
-  zvalue *ere = STKP-2;
-  zvalue *repl = STKP-1;
+  struct zvalue *v = setup_lvalue(stkptr, parmbase, &field_num);
+  struct zvalue *ere = STKP-2;
+  struct zvalue *repl = STKP-1;
   regex_t rx, *rxp = &rx;
   rx_zvalue_compile(&rxp, ere);
   val_to_str(repl);
@@ -1065,7 +1064,7 @@ static void gsub(int opcode, int nargs, int parmbase)
   }
 
   if (so >= 0) {  // at least one hit
-    zstring *z = new_zstring_cap(need);
+    struct zstring *z = new_zstring_cap(need);
     char *e = z->str; // result destination pointer
     p = s;
     eflags = 0;
@@ -1171,7 +1170,7 @@ static int interpx(int start, int *status)
   int opcode, op2, k, r, nargs, nsubscrs, range_num, parmbase = 0;
   int field_num;
   double nleft, nright;
-  zvalue *v, vv;
+  struct zvalue *v, vv;
 // looptop
   while ((opcode = *ip++)) {
 
@@ -1423,7 +1422,7 @@ static int interpx(int start, int *status)
           val_to_str(&FIELD[0]);
           fprintf(outfp, "%s", FIELD[0].vst->str);
         } else {
-          zvalue tempv = uninit_zvalue;
+          struct zvalue tempv = uninit_zvalue;
           zvalue_copy(&tempv, &STACK[OFS]);
           val_to_str(&tempv);
           for (int k = 0; k < nargs; k++) {
@@ -1432,7 +1431,7 @@ static int interpx(int start, int *status)
             ////// FIXME refcnt -- prob. don't need to copy from stack?
             v = &STACK[sp];
             val_to_str_fmt(v, val_to_str(&STACK[OFMT])->vst->str);
-            zstring *zs = v->vst;
+            struct zstring *zs = v->vst;
             fprintf(outfp, "%s", zs ? zs->str : "");
           }
           zvalue_release_zstring(&tempv);
@@ -1457,8 +1456,8 @@ static int interpx(int start, int *status)
 #define FUNCTION_NUM    0
       case tkfunction:    // function definition
         op2 = *ip++;    // func table num
-        func_def_entry *pfdef = &FUNC_DEF[op2];
-        zlist *loctab = &pfdef->function_locals;
+        struct functab_slot *pfdef = &FUNC_DEF[op2];
+        struct zlist *loctab = &pfdef->function_locals;
         int nparms = zlist_len(loctab)-1;
 
         nargs = popnumval();
@@ -1483,8 +1482,8 @@ static int interpx(int start, int *status)
           // This is sloppy but this situation should be rare and the maybe-map
           // should (!) be empty.
           // See force_maybemap_to_scalar().
-          locals_entry *q = &((locals_entry *)loctab->base)[nargs+1];
-          vv = (zvalue)ZVINIT(q->flags, 0, 0);
+          struct symtab_slot *q = &((struct symtab_slot *)loctab->base)[nargs+1];
+          vv = (struct zvalue)ZVINIT(q->flags, 0, 0);
           if (vv.flags == 0) {
             zvalue_map_init(&vv);
             vv.flags = ZF_MAYBEMAP;
@@ -1599,14 +1598,14 @@ static int interpx(int start, int *status)
         v = STKP-1;
         force_maybemap_to_map(v);
         if (!(is_map(v))) fatal("scalar in array context");
-        zmap *m = v->map;   // Need for MAPSLOT macro (in map.h)
+        struct zmap *m = v->map;   // Need for MAPSLOT macro (in map.h)
         int zlen = zlist_len(&m->slot);
         int kk = STKP->num + 1;
         while (kk < zlen && !(MAPSLOT[kk].key)) // skip deleted slots
           kk++;
         STKP->num = kk; // save index for next iteration
         if (kk < zlen) {
-          zvalue *var = setup_lvalue(stkptr-2, parmbase, &field_num);
+          struct zvalue *var = setup_lvalue(stkptr-2, parmbase, &field_num);
           var->flags = ZF_STR;
           zstring_release(&var->vst);
           var->vst = MAPSLOT[kk].key;
@@ -1672,13 +1671,13 @@ static int interpx(int start, int *status)
 
       case opvarref:
         op2 = *ip++;
-        vv = (zvalue)ZVINIT(ZF_REF, op2, 0);
+        vv = (struct zvalue)ZVINIT(ZF_REF, op2, 0);
         push_val(&vv);
         break;
 
       case opmapref:
         op2 = *ip++;
-        vv = (zvalue)ZVINIT(ZF_MAPREF, op2, 0);
+        vv = (struct zvalue)ZVINIT(ZF_MAPREF, op2, 0);
         push_val(&vv);
         break;
 
@@ -1777,10 +1776,10 @@ static int interpx(int start, int *status)
       case tksplit:
         nargs = *ip++;
         if (nargs == 2) push_val(&STACK[FS]);
-        zstring *s = val_to_str(STKP-2)->vst;
+        struct zstring *s = val_to_str(STKP-2)->vst;
         force_maybemap_to_map(STKP-1);
-        zvalue *a = STKP-1;
-        zvalue *fs = STKP;
+        struct zvalue *a = STKP-1;
+        struct zvalue *fs = STKP;
         zmap_delete_map(a->map);
         k = split(s, a, fs);
         drop_n(3);
@@ -1813,12 +1812,12 @@ static int interpx(int start, int *status)
 
       case tksubstr:
         nargs = *ip++;
-        zstring *zz = val_to_str(&STACK[stkptr-nargs+1])->vst;
+        struct zstring *zz = val_to_str(&STACK[stkptr-nargs+1])->vst;
         // Offset of start of string; convert 1-based to 0-based
         ssize_t mm = clamp(trunc(val_to_num(&STACK[stkptr-nargs+2]))-1, 0, zz->size);
         ssize_t nn = zz->size - mm;   // max possible substring length
         if (nargs == 3) nn = clamp(trunc(val_to_num(STKP)), 0, nn);
-        zstring *zzz = new_zstring(zz->str + mm, nn);
+        struct zstring *zzz = new_zstring(zz->str + mm, nn);
         zstring_release(&STACK[stkptr-nargs+1].vst);
         STACK[stkptr-nargs+1].vst = zzz;
         drop_n(nargs - 1);
@@ -1841,7 +1840,7 @@ static int interpx(int start, int *status)
         val_to_str(STKP);
         // Need to dup the string to not modify original.
         zvalue_dup_zstring(STKP);
-        zstring *z = STKP->vst;
+        struct zstring *z = STKP->vst;
         char *p = z->str, *e = z->str + z->size;
         for (; p < e; p++) *p = f(*p);
         break;
@@ -1891,7 +1890,7 @@ static int interpx(int start, int *status)
         rgl.zspr = new_zstring("", 0);
         varprint(fsprintf, 0, nargs);
         drop_n(nargs);
-        vv = (zvalue)ZVINIT(ZF_STR, 0, rgl.zspr);
+        vv = (struct zvalue)ZVINIT(ZF_STR, 0, rgl.zspr);
         push_val(&vv);
         break;
 
@@ -1926,10 +1925,10 @@ static int interp(int start, int *status)
   return r;
 }
 
-static void insert_argv_map(zvalue *map, int key, char *value)
+static void insert_argv_map(struct zvalue *map, int key, char *value)
 {
-  zvalue zkey = ZVINIT(ZF_STR, 0, num_to_zstring(key, ensure_str(&STACK[CONVFMT])->vst->str));
-  zvalue *v = get_map_val(map, &zkey);
+  struct zvalue zkey = ZVINIT(ZF_STR, 0, num_to_zstring(key, ensure_str(&STACK[CONVFMT])->vst->str));
+  struct zvalue *v = get_map_val(map, &zkey);
   zvalue_release_zstring(&zkey);
   zvalue_release_zstring(v);
   *v = new_str_val(value);
@@ -1944,15 +1943,15 @@ static void init_globals(int optind, int argc, char **argv, char *sepstring, int
 
   STACK[CONVFMT] = new_str_val("%.6g");
   // Init ENVIRON map.
-  zvalue m = ZVINIT(ZF_MAP, 0, 0);
+  struct zvalue m = ZVINIT(ZF_MAP, 0, 0);
   zvalue_map_init(&m);
   STACK[ENVIRON] = m;
   for (char **pkey = envp; *pkey; pkey++) {
     char *pval = strchr(*pkey, '=');
     if (!pval) continue;
     *pval++ = '\0';
-    zvalue zkey = ZVINIT(ZF_STR, 0, new_zstring(*pkey, strlen(*pkey)));
-    zvalue *v = get_map_val(&m, &zkey);
+    struct zvalue zkey = ZVINIT(ZF_STR, 0, new_zstring(*pkey, strlen(*pkey)));
+    struct zvalue *v = get_map_val(&m, &zkey);
     zstring_release(&zkey.vst);
     if (v->vst) ffatal("env var dup? (%s)", pkey);
     *v = new_str_val(pval);    // FIXME refcnt
@@ -1960,7 +1959,7 @@ static void init_globals(int optind, int argc, char **argv, char *sepstring, int
   }
 
   // Init ARGV map.
-  m = (zvalue)ZVINIT(ZF_MAP, 0, 0);
+  m = (struct zvalue)ZVINIT(ZF_MAP, 0, 0);
   zvalue_map_init(&m);
   STACK[ARGV] = m;
   insert_argv_map(&m, 0, progname);
@@ -1971,18 +1970,18 @@ static void init_globals(int optind, int argc, char **argv, char *sepstring, int
   }
 
   // Init rest of the awk special variables.
-  STACK[ARGC] = (zvalue)ZVINIT(ZF_NUM, nargc, 0);
+  STACK[ARGC] = (struct zvalue)ZVINIT(ZF_NUM, nargc, 0);
   STACK[FILENAME] = new_str_val("");
-  STACK[FNR] = (zvalue)ZVINIT(ZF_NUM, 0, 0);
+  STACK[FNR] = (struct zvalue)ZVINIT(ZF_NUM, 0, 0);
   STACK[FS] = new_str_val(sepstring);
-  STACK[NF] = (zvalue)ZVINIT(ZF_NUM, 0, 0);
-  STACK[NR] = (zvalue)ZVINIT(ZF_NUM, 0, 0);
+  STACK[NF] = (struct zvalue)ZVINIT(ZF_NUM, 0, 0);
+  STACK[NR] = (struct zvalue)ZVINIT(ZF_NUM, 0, 0);
   STACK[OFMT] = new_str_val("%.6g");
   STACK[OFS] = new_str_val(" ");
   STACK[ORS] = new_str_val("\n");
-  STACK[RLENGTH] = (zvalue)ZVINIT(ZF_NUM, 0, 0);
+  STACK[RLENGTH] = (struct zvalue)ZVINIT(ZF_NUM, 0, 0);
   STACK[RS] = new_str_val("\n");
-  STACK[RSTART] = (zvalue)ZVINIT(ZF_NUM, 0, 0);
+  STACK[RSTART] = (struct zvalue)ZVINIT(ZF_NUM, 0, 0);
   STACK[SUBSEP] = new_str_val("\034");
 
   // Init program globals.
@@ -2004,8 +2003,8 @@ static void init_globals(int optind, int argc, char **argv, char *sepstring, int
   //
   int gstx, len = zlist_len(&globals_table);
   for (gstx = spec_var_limit; gstx < len; gstx++) {
-    globals_entry gs = GLOBAL[gstx];
-    zvalue v = ZVINIT(gs.flags, 0, 0);
+    struct symtab_slot gs = GLOBAL[gstx];
+    struct zvalue v = ZVINIT(gs.flags, 0, 0);
     if (v.flags == 0) {
       zvalue_map_init(&v);
       v.flags = ZF_MAYBEMAP;

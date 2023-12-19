@@ -142,35 +142,28 @@ enum spec_var_names { ARGC=1, ARGV, CONVFMT, ENVIRON, FILENAME, FNR, FS, NF,
     NR, OFMT, OFS, ORS, RLENGTH, RS, RSTART, SUBSEP };
 
 // zlist: expanding sequential list
-typedef struct {
+struct zlist {
   char *base, *limit, *avail;
   size_t size;
-} zlist;
+};
 
-typedef struct {    // global symbol table entry
+struct symtab_slot {    // global symbol table entry
   unsigned flags;
   int slotnum;
   char *name;
-} globals_entry;
-
-typedef struct {    // local symbol table entry
-  unsigned flags;
-  int slotnum;
-  char *name;
-} locals_entry;
+};
 
 // zstring: flexible string type.
 // Capacity must be > size because we insert a NUL byte.
-typedef struct {
+struct zstring {
   int refcnt;
   unsigned size;
   unsigned capacity;
   char str[];   // C99 flexible array member
-} zstring;
+};
 
-// These two typedefs are here to deal w/ circular name refs in the struct decls
-typedef struct zmap zmap;
-typedef struct zvalue zvalue;
+// struct zmap; Forward declaration apparently not needed to avoid
+// problem with zvalue and zmap referencing each other.
 
 // zvalue: the main awk value type
 // Can be number or string or both, or else map (array) or regex
@@ -192,8 +185,8 @@ struct zvalue {
   unsigned flags;
   double num;
   union { // anonymous union not in C99; not going to fix it now.
-    zstring *vst;
-    zmap *map;
+    struct zstring *vst;
+    struct zmap *map;
     regex_t *rx;
   };
 };
@@ -207,36 +200,36 @@ struct zvalue {
 #define is_map(zvalp) ((zvalp)->flags & ZF_MAP)
 #define is_empty_rx(zvalp) ((zvalp)->flags & ZF_EMPTY_RX)
 
-#define GLOBAL      ((globals_entry *)globals_table.base)
-#define LOCAL       ((locals_entry *)locals_table.base)
-#define FUNC_DEF    ((func_def_entry *)func_def_table.base)
+#define GLOBAL      ((struct symtab_slot *)globals_table.base)
+#define LOCAL       ((struct symtab_slot *)locals_table.base)
+#define FUNC_DEF    ((struct functab_slot *)func_def_table.base)
 
-#define LITERAL     ((zvalue *)literals.base)
-#define STACK       ((zvalue *)stack.base)
-#define FIELD       ((zvalue *)fields.base)
+#define LITERAL     ((struct zvalue *)literals.base)
+#define STACK       ((struct zvalue *)stack.base)
+#define FIELD       ((struct zvalue *)fields.base)
 
 #define ZCODE       ((int *)zcode.base)
 
 #define FUNC_DEFINED    (1u)
 #define FUNC_CALLED     (2u)
-typedef struct {    // function symbol table entry
+struct functab_slot {    // function symbol table entry
   unsigned flags;
   int slotnum;
   char *name;
-  zlist function_locals;
+  struct zlist function_locals;
   int zcode_addr;
-} func_def_entry;
+};
 
 // Elements of the hash table (key/value pairs)
-typedef struct {
+struct zmap_slot {
   int hash;       // store hash key to speed hash table expansion
-  zstring *key;
-  zvalue val;
-} zmapslot;
+  struct zstring *key;
+  struct zvalue val;
+};
 #define ZMSLOTINIT(hash, key, val) {hash, key, val}
 
 // zmap: Mapping data type for arrays; a hash table. Values in hash are either
-// 0 (unused), -1 (marked deleted), or one plus the number of the zmapslot
+// 0 (unused), -1 (marked deleted), or one plus the number of the zmap slot
 // containing a key/value pair. The zlist slot entries are numbered from 0 to
 // count-1, so need to add one to distinguish from unused.  The probe sequence
 // is borrowed from Python dict, using the "perturb" idea to mix in upper bits
@@ -247,10 +240,10 @@ struct zmap {
   int limit;      // 80% of table size ((mask+1)*8/10)
   int count;      // number of occupied slots in hash
   int deleted;    // number of deleted slots
-  zlist slot;     // expanding list of zmapslot elements
+  struct zlist slot;     // expanding list of zmap_slot elements
 };
 
-#define MAPSLOT    ((zmapslot *)(m->slot).base)
+#define MAPSLOT    ((struct zmap_slot *)(m->slot).base)
 
 #define ffatal(format, ...) zzfatal(__FILE__, __LINE__, format, __VA_ARGS__)
 #define fatal(...) zzfatal(__FILE__, __LINE__, "%s\n", __VA_ARGS__)
@@ -289,7 +282,7 @@ ssize_t getdelim(char ** restrict lineptr, size_t * restrict n, int delimiter, F
 EXTERN struct scanner_state *scs;
 
 // Forward ref declarations
-EXTERN zvalue *val_to_str(zvalue *v);
+EXTERN struct zvalue *val_to_str(struct zvalue *v);
 EXTERN char *escape_str(char *s);
 EXTERN int rx_compile(regex_t *rx, char *pat);
 
@@ -304,29 +297,29 @@ EXTERN void dump_stack(char *label);
 EXTERN void dump_zcode(void);
 EXTERN void dump_tables(void);
 
-EXTERN void dump_zlist(char *label, zlist *z);
-EXTERN void dump_zstring(char *label, zstring *s);
-EXTERN void dump_zstringx(char *label, zstring *s);
+EXTERN void dump_zlist(char *label, struct zlist *z);
+EXTERN void dump_zstring(char *label, struct zstring *s);
+EXTERN void dump_zstringx(char *label, struct zstring *s);
 EXTERN void dumpstrx(char *s, int n);
 EXTERN void dumpstr(char *s);
-EXTERN void dump_zvalue(char *label, zvalue *v);
+EXTERN void dump_zvalue(char *label, struct zvalue *v);
 
 EXTERN int last_global;    // set in run.h; used only for dump_stack() info.
 EXTERN int spec_var_limit; // used in compile.h and run.h
 EXTERN int stkptr;         // used in run.h and (once) in compile.h (& dumputils.h)
 EXTERN int zcode_last;     // used in common.h and compile.h
 
-EXTERN zlist globals_table;  // global symbol table
-EXTERN zlist locals_table;  // local symbol table
-EXTERN zlist func_def_table;  // function symbol table
+EXTERN struct zlist globals_table;  // global symbol table
+EXTERN struct zlist locals_table;  // local symbol table
+EXTERN struct zlist func_def_table;  // function symbol table
 
-EXTERN zlist literals;
-EXTERN zlist fields;
-EXTERN zlist zcode;
-EXTERN zlist stack;
+EXTERN struct zlist literals;
+EXTERN struct zlist fields;
+EXTERN struct zlist zcode;
+EXTERN struct zlist stack;
 
-EXTERN zvalue uninit_zvalue;
-EXTERN zvalue uninit_string_zvalue;
+EXTERN struct zvalue uninit_zvalue;
+EXTERN struct zvalue uninit_string_zvalue;
 
 EXTERN char *ops, *keywords, *builtins;
 EXTERN char *toknames[];
@@ -339,7 +332,7 @@ EXTERN int opt_print_source;
 
 EXTERN struct compiler_globals cgl;
 
-EXTERN void zvalue_dup_zstring(zvalue *v);
+EXTERN void zvalue_dup_zstring(struct zvalue *v);
 
 EXTERN void zzfatal(char *fn, int lnum, char *format, ...);
 EXTERN void zzerr(char *fn, int lnum, char *format, ...);
@@ -353,32 +346,32 @@ EXTERN char *xstrdup(char *s);
 EXTERN double str_to_num(char *s);
 EXTERN int hexval(int c);
 EXTERN char *rx_escape_str(char *s);
-EXTERN zlist *zlist_init(zlist *p, size_t size);
-EXTERN size_t zlist_append(zlist *p, void *obj);
-EXTERN int zlist_len(zlist *p);
+EXTERN struct zlist *zlist_init(struct zlist *p, size_t size);
+EXTERN size_t zlist_append(struct zlist *p, void *obj);
+EXTERN int zlist_len(struct zlist *p);
 EXTERN void get_token_text(char *op, int tk);
-EXTERN void zstring_release(zstring **s);
-EXTERN void zstring_incr_refcnt(zstring *s);
-EXTERN zstring *new_zstring_cap(int capacity);
-EXTERN zstring *zstring_update(zstring *to, size_t at, char *s, size_t n);
-EXTERN zstring *zstring_copy(zstring *to, zstring *from);
-EXTERN zstring *zstring_extend(zstring *to, zstring *from);
-EXTERN zstring *new_zstring(char *s, size_t size);
-EXTERN zvalue new_str_val(char *s);
-EXTERN void zvalue_release_zstring(zvalue *v);
-EXTERN void push_val(zvalue *v);
-EXTERN void zvalue_copy(zvalue *to, zvalue *from);
+EXTERN void zstring_release(struct zstring **s);
+EXTERN void zstring_incr_refcnt(struct zstring *s);
+EXTERN struct zstring *new_zstring_cap(int capacity);
+EXTERN struct zstring *zstring_update(struct zstring *to, size_t at, char *s, size_t n);
+EXTERN struct zstring *zstring_copy(struct zstring *to, struct zstring *from);
+EXTERN struct zstring *zstring_extend(struct zstring *to, struct zstring *from);
+EXTERN struct zstring *new_zstring(char *s, size_t size);
+EXTERN struct zvalue new_str_val(char *s);
+EXTERN void zvalue_release_zstring(struct zvalue *v);
+EXTERN void push_val(struct zvalue *v);
+EXTERN void zvalue_copy(struct zvalue *to, struct zvalue *from);
 EXTERN void init_scanner(void);
 EXTERN void scan(void);
 EXTERN int find_global(char *s);
 EXTERN void compile(void);
-EXTERN int zstring_match(zstring *a, zstring *b);
-EXTERN zvalue *zmap_find(zmap *m, zstring *key);
-EXTERN void zvalue_map_init(zvalue *v);
-EXTERN void zmap_delete_map_incl_slotdata(zmap *m);
-EXTERN void zmap_delete_map(zmap *m);
-EXTERN zmapslot *zmap_find_or_insert_key(zmap *m, zstring *key);
-EXTERN void zmap_delete(zmap *m, zstring *key);
+EXTERN int zstring_match(struct zstring *a, struct zstring *b);
+EXTERN struct zvalue *zmap_find(struct zmap *m, struct zstring *key);
+EXTERN void zvalue_map_init(struct zvalue *v);
+EXTERN void zmap_delete_map_incl_slotdata(struct zmap *m);
+EXTERN void zmap_delete_map(struct zmap *m);
+EXTERN struct zmap_slot *zmap_find_or_insert_key(struct zmap *m, struct zstring *key);
+EXTERN void zmap_delete(struct zmap *m, struct zstring *key);
 EXTERN void run(int optind, int argc, char **argv, char *sepstring, int num_assignments, char **assignments, char **envp);
 
 #endif // MONOLITHIC

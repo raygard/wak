@@ -8,14 +8,14 @@
 //// common defs
 ////////////////////
 
-EXTERN zlist globals_table;  // global symbol table
-EXTERN zlist locals_table;  // local symbol table
-EXTERN zlist func_def_table;  // function symbol table
+EXTERN struct zlist globals_table;  // global symbol table
+EXTERN struct zlist locals_table;  // local symbol table
+EXTERN struct zlist func_def_table;  // function symbol table
 
-EXTERN zlist literals;
-EXTERN zlist fields;
-EXTERN zlist zcode;
-EXTERN zlist stack;
+EXTERN struct zlist literals;
+EXTERN struct zlist fields;
+EXTERN struct zlist zcode;
+EXTERN struct zlist stack;
 
 EXTERN char *ops = " ;  ,  [  ]  (  )  {  }  $  ++ -- ^  !  *  /  %  +  -  .. "
         "<  <= != == >  >= ~  !~ && || ?  :  ^= %= *= /= += -= =  >> |  ";
@@ -76,7 +76,7 @@ EXTERN void get_token_text(char *op, int tk)
 ////   zlist
 ////////////////////
 
-static zlist *zlist_initx(zlist *p, size_t size, size_t count)
+static struct zlist *zlist_initx(struct zlist *p, size_t size, size_t count)
 {
   p->base = p->avail = xzalloc(count * size);
   p->limit = p->base + size * count;
@@ -84,13 +84,13 @@ static zlist *zlist_initx(zlist *p, size_t size, size_t count)
   return p;
 }
 
-EXTERN zlist *zlist_init(zlist *p, size_t size)
+EXTERN struct zlist *zlist_init(struct zlist *p, size_t size)
 {
 #define SLIST_MAX_INIT_BYTES 128
   return zlist_initx(p, size, SLIST_MAX_INIT_BYTES / size);
 }
 
-static void zlist_expand(zlist *p)
+static void zlist_expand(struct zlist *p)
 {
   size_t offset = p->avail - p->base;
   size_t cap = p->limit - p->base;
@@ -102,7 +102,7 @@ static void zlist_expand(zlist *p)
   p->avail = base + offset;
 }
 
-EXTERN size_t zlist_append(zlist *p, void *obj)
+EXTERN size_t zlist_append(struct zlist *p, void *obj)
 {
   // Insert obj (p->size bytes) at end of list, expand as needed.
   // Return scaled offset to newly inserted obj; i.e. the
@@ -120,7 +120,7 @@ EXTERN size_t zlist_append(zlist *p, void *obj)
   return (p->avail - p->base - p->size) / p->size;  // offset of updated slot
 }
 
-EXTERN int zlist_len(zlist *p)
+EXTERN int zlist_len(struct zlist *p)
 {
   return (p->avail - p->base) / p->size;
 }
@@ -132,26 +132,26 @@ EXTERN int zlist_len(zlist *p)
 
 
 
-EXTERN void zstring_release(zstring **s)
+EXTERN void zstring_release(struct zstring **s)
 {
   if (*s && (**s).refcnt-- == 0) xfree(*s); //free_zstring(s);
   *s = 0;
 }
 
-EXTERN void zstring_incr_refcnt(zstring *s)
+EXTERN void zstring_incr_refcnt(struct zstring *s)
 {
   if (s) s->refcnt++;
 }
 
-EXTERN zstring *new_zstring_cap(int capacity)
+EXTERN struct zstring *new_zstring_cap(int capacity)
 {
-  zstring *z = xzalloc(sizeof(*z) + capacity);
+  struct zstring *z = xzalloc(sizeof(*z) + capacity);
   z->capacity = capacity;
   return z;
 }
 
 // !! Use only if 'to' is NULL or its refcnt is 0.
-static zstring *zstring_modify(zstring *to, size_t at, char *s, size_t n)
+static struct zstring *zstring_modify(struct zstring *to, size_t at, char *s, size_t n)
 {
   size_t cap = at + n + 1;
   if (!to || to->capacity < cap) {
@@ -168,27 +168,27 @@ static zstring *zstring_modify(zstring *to, size_t at, char *s, size_t n)
 // The 'to' pointer may move by realloc, so return (maybe updated) pointer.
 // If refcnt is nonzero then there is another pointer to this zstring,
 // so copy this one and release it. If refcnt is zero we can mutate this.
-EXTERN zstring *zstring_update(zstring *to, size_t at, char *s, size_t n)
+EXTERN struct zstring *zstring_update(struct zstring *to, size_t at, char *s, size_t n)
 {
   if (to && to->refcnt) {
-    zstring *to_before = to;
+    struct zstring *to_before = to;
     to = zstring_modify(0, 0, to->str, to->size);
     zstring_release(&to_before);
   }
   return zstring_modify(to, at, s, n);
 }
 
-EXTERN zstring *zstring_copy(zstring *to, zstring *from)
+EXTERN struct zstring *zstring_copy(struct zstring *to, struct zstring *from)
 {
   return zstring_update(to, 0, from->str, from->size);
 }
 
-EXTERN zstring *zstring_extend(zstring *to, zstring *from)
+EXTERN struct zstring *zstring_extend(struct zstring *to, struct zstring *from)
 {
   return zstring_update(to, to->size, from->str, from->size);
 }
 
-EXTERN zstring *new_zstring(char *s, size_t size)
+EXTERN struct zstring *new_zstring(char *s, size_t size)
 {
   return zstring_modify(0, 0, s, size);
 }
@@ -198,34 +198,34 @@ EXTERN zstring *new_zstring(char *s, size_t size)
 ////////////////////
 
 
-EXTERN zvalue uninit_zvalue = ZVINIT(0, 0.0, 0);
+EXTERN struct zvalue uninit_zvalue = ZVINIT(0, 0.0, 0);
 
 // This will be reassigned in init_globals() with an empty string.
 // It's a special value used for "uninitialized" field vars
 // referenced past $NF. See push_field().
-EXTERN zvalue uninit_string_zvalue = ZVINIT(0, 0.0, 0);
+EXTERN struct zvalue uninit_string_zvalue = ZVINIT(0, 0.0, 0);
 
-EXTERN zvalue new_str_val(char *s)
+EXTERN struct zvalue new_str_val(char *s)
 {
   // Only if no nul inside string!
-  zvalue v = ZVINIT(ZF_STR, 0.0, new_zstring(s, strlen(s)));
+  struct zvalue v = ZVINIT(ZF_STR, 0.0, new_zstring(s, strlen(s)));
   return v;
 }
 
-EXTERN void zvalue_release_zstring(zvalue *v)
+EXTERN void zvalue_release_zstring(struct zvalue *v)
 {
   if (v && ! (v->flags & (ZF_ANYMAP | ZF_RX))) zstring_release(&v->vst);
 }
 
-static size_t zlist_append_zvalue(zlist *p, zvalue *v)
+static size_t zlist_append_zvalue(struct zlist *p, struct zvalue *v)
 {
-  zvalue vtemp;
+  struct zvalue vtemp;
   if (p->avail > p->limit - sizeof(*v)) {
     vtemp = *v;
     v = &vtemp;
     zlist_expand(p);
   }
-  *(zvalue *)p->avail = *v;
+  *(struct zvalue *)p->avail = *v;
   p->avail += p->size;
   return (p->avail - p->base - p->size) / p->size;  // offset of updated slot
 }
@@ -236,13 +236,13 @@ static size_t zlist_append_zvalue(zlist *p, zvalue *v)
 // Note the incr refcnt used to be after the zlist_append, but that caused a
 // heap-use-after-free error when the zlist_append relocated the zvalue being
 // pushed, invalidating the v pointer.
-EXTERN void push_val(zvalue *v)
+EXTERN void push_val(struct zvalue *v)
 {
   if (is_str(v)) zstring_incr_refcnt(v->vst);
   stkptr = zlist_append_zvalue(&stack, v);
 }
 
-EXTERN void zvalue_copy(zvalue *to, zvalue *from)
+EXTERN void zvalue_copy(struct zvalue *to, struct zvalue *from)
 {
   if (from->flags & ZF_ANYMAP) fatal("attempt to copy array var");
   if (is_rx(from)) *to = *from;
@@ -253,9 +253,9 @@ EXTERN void zvalue_copy(zvalue *to, zvalue *from)
   }
 }
 
-EXTERN void zvalue_dup_zstring(zvalue *v)
+EXTERN void zvalue_dup_zstring(struct zvalue *v)
 {
-  zstring *z = new_zstring(v->vst->str, v->vst->size);
+  struct zstring *z = new_zstring(v->vst->str, v->vst->size);
   zstring_release(&v->vst);
   v->vst = z;
 }
@@ -265,12 +265,12 @@ EXTERN void zvalue_dup_zstring(zvalue *v)
 ////////////////////
 
 
-EXTERN int zstring_match(zstring *a, zstring *b)
+EXTERN int zstring_match(struct zstring *a, struct zstring *b)
 {
   return a->size == b->size && memcmp(a->str, b->str, a->size) == 0;
 }
 
-static int zstring_hash(zstring *s)
+static int zstring_hash(struct zstring *s)
 {   // djb2 -- small, fast, good enough for this
   unsigned h = 5381;
   for (size_t k = 0; k < s->size; k++)
@@ -280,9 +280,9 @@ static int zstring_hash(zstring *s)
 
 enum { PSHIFT = 5 };  // "perturb" shift -- see find_mapslot() below
 
-static zmapslot *find_mapslot(zmap *m, zstring *key, int *hash, int *probe)
+static struct zmap_slot *find_mapslot(struct zmap *m, struct zstring *key, int *hash, int *probe)
 {
-  zmapslot *x = 0;
+  struct zmap_slot *x = 0;
   *hash = zstring_hash(key);
   unsigned perturb = *hash;
   *probe = *hash & m->mask;
@@ -310,14 +310,14 @@ static zmapslot *find_mapslot(zmap *m, zstring *key, int *hash, int *probe)
   return 0;
 }
 
-EXTERN zvalue *zmap_find(zmap *m, zstring *key)
+EXTERN struct zvalue *zmap_find(struct zmap *m, struct zstring *key)
 {
   int hash, probe;
-  zmapslot *x = find_mapslot(m, key, &hash, &probe);
+  struct zmap_slot *x = find_mapslot(m, key, &hash, &probe);
   return x ? &x->val : 0;
 }
 
-static void zmap_init(zmap *m)
+static void zmap_init(struct zmap *m)
 {
   enum {INIT_SIZE = 8};
   m->mask = INIT_SIZE - 1;
@@ -325,20 +325,20 @@ static void zmap_init(zmap *m)
   m->limit = INIT_SIZE * 8 / 10;
   m->count = 0;
   m->deleted = 0;
-  zlist_init(&m->slot, sizeof(zmapslot));
+  zlist_init(&m->slot, sizeof(struct zmap_slot));
 }
 
-EXTERN void zvalue_map_init(zvalue *v)
+EXTERN void zvalue_map_init(struct zvalue *v)
 {
-  zmap *m = xmalloc(sizeof(*m));
+  struct zmap *m = xmalloc(sizeof(*m));
   zmap_init(m);
   v->map = m;
   v->flags |= ZF_MAP;
 }
 
-EXTERN void zmap_delete_map_incl_slotdata(zmap *m)
+EXTERN void zmap_delete_map_incl_slotdata(struct zmap *m)
 {
-  for (zmapslot *p = &MAPSLOT[0]; p < &MAPSLOT[zlist_len(&m->slot)]; p++) {
+  for (struct zmap_slot *p = &MAPSLOT[0]; p < &MAPSLOT[zlist_len(&m->slot)]; p++) {
     if (p->key) zstring_release(&p->key);
     if (p->val.vst) zstring_release(&p->val.vst);
   }
@@ -346,14 +346,14 @@ EXTERN void zmap_delete_map_incl_slotdata(zmap *m)
   xfree(m->hash);
 }
 
-EXTERN void zmap_delete_map(zmap *m)
+EXTERN void zmap_delete_map(struct zmap *m)
 {
   zmap_delete_map_incl_slotdata(m);
   zmap_init(m);
 }
 
 
-static void zmap_rehash(zmap *m)
+static void zmap_rehash(struct zmap *m)
 {
   // New table is twice the size of old.
   int size = m->mask + 1;
@@ -380,10 +380,10 @@ static void zmap_rehash(zmap *m)
 
 
 
-EXTERN zmapslot *zmap_find_or_insert_key(zmap *m, zstring *key)
+EXTERN struct zmap_slot *zmap_find_or_insert_key(struct zmap *m, struct zstring *key)
 {
   int hash, probe;
-  zmapslot *x = find_mapslot(m, key, &hash, &probe);
+  struct zmap_slot *x = find_mapslot(m, key, &hash, &probe);
   if (x) return x;
   // not found; insert it.
   if (m->count == m->limit) {
@@ -392,7 +392,7 @@ EXTERN zmapslot *zmap_find_or_insert_key(zmap *m, zstring *key)
     x = find_mapslot(m, key, &hash, &probe);
   }
   // Assign key to new slot entry and bump refcnt.
-  zmapslot zs = ZMSLOTINIT(hash, key, (zvalue)ZVINIT(0, 0.0, 0));
+  struct zmap_slot zs = ZMSLOTINIT(hash, key, (struct zvalue)ZVINIT(0, 0.0, 0));
   zstring_incr_refcnt(key);
   int n = zlist_append(&m->slot, &zs);
   m->count++;
@@ -400,10 +400,10 @@ EXTERN zmapslot *zmap_find_or_insert_key(zmap *m, zstring *key)
   return &MAPSLOT[n];
 }
 
-EXTERN void zmap_delete(zmap *m, zstring *key)
+EXTERN void zmap_delete(struct zmap *m, struct zstring *key)
 {
   int hash, probe;
-  zmapslot *x = find_mapslot(m, key, &hash, &probe);
+  struct zmap_slot *x = find_mapslot(m, key, &hash, &probe);
   if (!x) return;
   zstring_release(&MAPSLOT[m->hash[probe] - 1].key);
   m->hash[probe] = -1;

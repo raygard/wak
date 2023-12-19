@@ -47,7 +47,7 @@ static void gencd(int op)
 static int make_literal_str_val(char *s)
 {
   // Only if no nul inside string!
-  zvalue v = new_str_val(s);
+  struct zvalue v = new_str_val(s);
   return zlist_append(&literals, &v);
 }
 
@@ -56,7 +56,7 @@ static int make_literal_regex_val(char *s)
   regex_t *rx;
   rx = xmalloc(sizeof(*rx));
   if (rx_compile(rx, s)) xerr("regex seen as '%s'\n", s);
-  zvalue v = ZVINIT(ZF_RX, 0, 0);
+  struct zvalue v = ZVINIT(ZF_RX, 0, 0);
   v.rx = rx;
   // Flag empty rx to make it easy to identify for split() special case
   if (!*s) v.flags |= ZF_EMPTY_RX;
@@ -65,13 +65,13 @@ static int make_literal_regex_val(char *s)
 
 static int make_literal_num_val(double num)
 {
-  zvalue v = ZVINIT(ZF_NUM, num, 0);
+  struct zvalue v = ZVINIT(ZF_NUM, num, 0);
   return zlist_append(&literals, &v);
 }
 
 static int make_uninit_val(void)
 {
-  zvalue v = uninit_zvalue;
+  struct zvalue v = uninit_zvalue;
   return zlist_append(&literals, &v);
 }
 //// END code and "literal" emitters
@@ -86,7 +86,7 @@ static int find_func_def_entry(char *s)
 
 static int add_func_def_entry(char *s)
 {
-  func_def_entry ent = {0, 0, 0, {0, 0, 0, 0}, 0};
+  struct functab_slot ent = {0, 0, 0, {0, 0, 0, 0}, 0};
   ent.name = xstrdup(s);
   int slotnum = zlist_append(&func_def_table, &ent);
   FUNC_DEF[slotnum].slotnum = slotnum;
@@ -102,7 +102,7 @@ EXTERN int find_global(char *s)
 
 static int add_global(char *s)
 {
-  globals_entry ent = {0, 0, 0};
+  struct symtab_slot ent = {0, 0, 0};
   ent.name = xstrdup(s);
   int slotnum = zlist_append(&globals_table, &ent);
   GLOBAL[slotnum].slotnum = slotnum;
@@ -118,7 +118,7 @@ static int find_local_entry(char *s)
 
 static int add_local_entry(char *s)
 {
-  locals_entry ent = {0, 0, 0};
+  struct symtab_slot ent = {0, 0, 0};
   ent.name = xstrdup(s);
   int slotnum = zlist_append(&locals_table, &ent);
   LOCAL[slotnum].slotnum = slotnum;
@@ -154,27 +154,27 @@ static char *spec_vars[] = { "ARGC", "ARGV", "CONVFMT", "ENVIRON", "FILENAME",
 //// Initialization
 static void init_locals_table(void)
 {
-  static locals_entry locals_ent;
-  zlist_init(&locals_table, sizeof(locals_entry));
+  static struct symtab_slot locals_ent;
+  zlist_init(&locals_table, sizeof(struct symtab_slot));
   zlist_append(&locals_table, &locals_ent);
 }
 
 static void init_tables(void)
 {
-  static globals_entry global_ent;
-  static func_def_entry func_ent;
+  static struct symtab_slot global_ent;
+  static struct functab_slot func_ent;
 
-  zlist_init(&globals_table, sizeof(globals_entry));
+  zlist_init(&globals_table, sizeof(struct symtab_slot));
   zlist_append(&globals_table, &global_ent);
 
-  zlist_init(&func_def_table, sizeof(func_def_entry));
+  zlist_init(&func_def_table, sizeof(struct functab_slot));
   zlist_append(&func_def_table, &func_ent);
   init_locals_table();
   zlist_init(&zcode, sizeof(int));
   gencd(tkeof);                   // FIXME do I need this?
-  zlist_init(&literals, sizeof(zvalue));
-  zlist_init(&stack, sizeof(zvalue));
-  zlist_init(&fields, sizeof(zvalue));
+  zlist_init(&literals, sizeof(struct zvalue));
+  zlist_init(&stack, sizeof(struct zvalue));
+  zlist_init(&fields, sizeof(struct zvalue));
   zlist_append(&literals, &uninit_zvalue);        // TEMP FIXME
   zlist_append(&stack, &uninit_zvalue);
   zlist_append(&fields, &uninit_zvalue);
