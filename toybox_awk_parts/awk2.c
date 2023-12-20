@@ -17,13 +17,13 @@ void awk_main(void)
   int optind = 0;
   char *progstring = NULL;
 
+  TT.pbuf = toybuf;
   toys.exitval = 73;
   if (! num_progfiles) {
     if (*toys.optargs) progstring = toys.optargs[optind++];
     else error_exit("No program string\n");
   }
-  progname = toys.which->name;
-  opt_print_source = FLAG(p);
+  TT.progname = toys.which->name;
   toys.exitval = awk(sepstring, num_assignments, assignments, num_progfiles,
       progfiles, progstring, optind, toys.optc, toys.optargs, 0, 0,
       !FLAG(r), environ);
