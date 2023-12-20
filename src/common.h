@@ -57,8 +57,8 @@
 
 #ifndef FOR_TOYBOX
 #define maxof(a,b) ((a)>(b)?(a):(b))
-#endif  // FOR_TOYBOX
 
+#endif  // FOR_TOYBOX
 ////////////////////
 ////   declarations
 ////////////////////
@@ -192,14 +192,11 @@ struct global_data {
   regex_t rx_printf_fmt;
 };
 #endif  // FOR_TOYBOX
-// END global variables
-enum Toktypes {
+enum toktypes {
     // EOF (use -1 from stdio.h)
     ERROR = 2, NEWLINE, VAR, NUMBER, STRING, REGEX, USERFUNC, BUILTIN, TOKEN,
     KEYWORD
     };
-
-// NOTE: nextfile, fflush NOT POSIX or in book
 
 // Must align with lbp_table[]
 enum tokens {
@@ -348,10 +345,10 @@ EXTERN struct global_data TT;
 
 // Forward ref declarations
 EXTERN struct zvalue *val_to_str(struct zvalue *v);
-EXTERN char *escape_str(char *s);
 EXTERN int rx_compile(regex_t *rx, char *pat);
 
 #ifndef MONOLITHIC
+EXTERN char *escape_str(char *s);
 EXTERN char *progname;
 EXTERN FILE *debout;    // Only for debugging
 EXTERN unsigned debug_flags;
@@ -426,4 +423,3 @@ EXTERN void run(int optind, int argc, char **argv, char *sepstring, int num_assi
 #endif // MONOLITHIC
 #undef EXTERN
 #define EXTERN
-

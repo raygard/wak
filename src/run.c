@@ -210,7 +210,6 @@ static void set_zvalue_str(struct zvalue *v, char *s, size_t size)
   v->flags = ZF_STR;
 }
 
-
 // All changes to NF go through here!
 static void set_nf(int nf)
 {
@@ -232,8 +231,6 @@ static void set_field(struct zmap *unused, int fnum, char *s, size_t size)
 
 // Split s via fs, using setter; return number of TT.fields.
 // This is used to split TT.fields and also for split() builtin.
-
-
 static int splitter(void (*setter)(struct zmap *, int, char *, size_t), struct zmap *m, char *s, struct zvalue *zvfs)
 {
   regex_t *rx;
@@ -379,9 +376,7 @@ static void push_field(int fnum)
 ////   run
 ////////////////////
 
-#define STKP    (&STACK[TT.stkptr])
-
-
+#define STKP    (&STACK[TT.stkptr])   // pointer to top of stack
 
 // Random number generator
 // Extracted from http://www.cs.ucl.ac.uk/staff/d.jones/GoodPracticeRNG.pdf
@@ -413,8 +408,6 @@ static void check_not_map(struct zvalue *v)
 {
   if (is_map(v)) fatal("array in scalar context");
 }
-
-
 
 static int popnumval(void)
 {
@@ -469,7 +462,6 @@ static int get_set_logical(void)
   v->flags = ZF_NUM;
   return r;
 }
-
 
 static struct zvalue *val_to_str_fmt(struct zvalue *v, char *fmt)
 {
@@ -630,7 +622,6 @@ static int close_file(void)
   return -1;    // file not found in table
 }
 
-
 // FIXME TODO check if file/pipe/mode matches what's in the table already.
 // Apparently gawk/mawk/nawk are OK with different mode, but just use the file
 // in whatever mode it's already in; i.e. > after >> still appends.
@@ -694,10 +685,6 @@ static int fsprintf(FILE *ignored, const char *fmt, ...)
   va_end(args2);
   return 0;
 }
-
-
-
-static char *printf_fmt_rx = "%[-+ #0]*([*]|[0-9]*)([.]([*]|[0-9]*))?[aAdiouxXfFeEgGcs%]";
 
 static void varprint(int(*fpvar)(FILE *, const char *, ...), FILE *outfp, int nargs)
 {
@@ -892,7 +879,6 @@ static int next_fp(void)
   return 1;
 }
 
-
 static ssize_t getrec_multiline(FILE *fp)
 {
   ssize_t k, kk;
@@ -975,7 +961,6 @@ static int awk_getline(int source, FILE *fp, struct zvalue *v)
   } else k = is_stream ? getrec_f0_f(fp) : getrec_f0();
   return k < 0 ? 0 : 1;
 }
-
 
 // Define GAWK_SUB to get the same behavior with sub()/gsub() replacement text
 // as with gawk, goawk, and recent bwk awk (nawk) versions. Undefine GAWK_SUB
@@ -1117,7 +1102,6 @@ static void math_builtin(int opcode, int nargs)
   }
 }
 
-
 #define clamp(x, lo, hi) ((x) < (lo) ? (lo) : (x) > (hi) ? (hi) : (x))
 
 // Main loop of interpreter. Run this once for all BEGIN rules (which
@@ -1132,10 +1116,7 @@ static int interpx(int start, int *status)
   struct zvalue *v, vv;
 // looptop
   while ((opcode = *ip++)) {
-
-
     switch (opcode) {
-
       case opquit:
         return opquit;
 
@@ -1462,8 +1443,6 @@ static int interpx(int start, int *status)
         //     should be copied! STACK[parmbase+RETURN_VALUE] = STKP[0];
         zvalue_copy(&STACK[parmbase+RETURN_VALUE], STKP);
         drop();
-
-
         // Remove the local args (not supplied by caller) from TT.stack, check to
         // release any map data created.
         while (TT.stkptr > parmbase + nargs) {
@@ -1557,7 +1536,7 @@ static int interpx(int start, int *status)
         v = STKP-1;
         force_maybemap_to_map(v);
         if (!(is_map(v))) fatal("scalar in array context");
-        struct zmap *m = v->map;   // Need for MAPSLOT macro (in map.h)
+        struct zmap *m = v->map;   // Need for MAPSLOT macro
         int zlen = zlist_len(&m->slot);
         int kk = STKP->num + 1;
         while (kk < zlen && !(MAPSLOT[kk].key)) // skip deleted slots
@@ -1719,8 +1698,6 @@ static int interpx(int start, int *status)
         //  1 tkpipe:  (lvalue)  from piped command in 'stream'
         v = nargs ? setup_lvalue(TT.stkptr, parmbase, &field_num) : 0;
         if (v) drop();
-
-
         // source is tkeof (no pipe/file), tklt (file), or tkpipe (pipe)
         // stream is name of file or pipe
         // v is NULL or an lvalue ref
@@ -1730,7 +1707,6 @@ static int interpx(int start, int *status)
         break;
 
         ////// builtin functions ///////
-
 
       case tksplit:
         nargs = *ip++;
@@ -2006,6 +1982,7 @@ static void free_literal_regex(void)
 
 EXTERN void run(int optind, int argc, char **argv, char *sepstring, int num_assignments, char **assignments, char **envp)
 {
+  char *printf_fmt_rx = "%[-+ #0]*([*]|[0-9]*)([.]([*]|[0-9]*))?[aAdiouxXfFeEgGcs%]";
   init_globals(optind, argc, argv, sepstring, num_assignments, assignments, envp);
   init_field_rx();
   rx_compile_or_die(&TT.rx_printf_fmt, printf_fmt_rx);

@@ -60,8 +60,8 @@ static int awk(char *sepstring, int num_assignments, char **assignments,
 }
 
 EXTERN int trace_sw = 0;
-
 #ifndef FOR_TOYBOX
+
 int main(int argc, char **argv, char **envp)
 {
   char *usage = {

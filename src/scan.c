@@ -229,7 +229,6 @@ static void get_string_or_regex(int endchar)
   gch();
 }
 
-
 static void ascan_opt_div(int div_op_allowed_here)
 {
   int n;

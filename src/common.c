@@ -28,7 +28,6 @@ EXTERN char *builtins = " atan2     cos       sin       exp       log       "
     "close     index     match     split     "
     "sub       gsub      sprintf   substr    ";
 
-
 EXTERN void zzerr(char *fn, int lnum, char *format, ...)
 {
   va_list args;
@@ -40,7 +39,6 @@ EXTERN void zzerr(char *fn, int lnum, char *format, ...)
   va_end(args);
   fflush(stderr);
 }
-
 
 EXTERN void zzfatal(char *fn, int lnum, char *format, ...)
 {
@@ -55,7 +53,6 @@ EXTERN void zzfatal(char *fn, int lnum, char *format, ...)
   exit(42);
 }
 
-// Used in compile.h but mostly in run.h
 EXTERN void get_token_text(char *op, int tk)
 {
   // This MUST ? be changed if ops string or tk... assignments change!
@@ -116,12 +113,9 @@ EXTERN int zlist_len(struct zlist *p)
   return (p->avail - p->base) / p->size;
 }
 
-
 ////////////////////
 ////   zstring
 ////////////////////
-
-
 
 EXTERN void zstring_release(struct zstring **s)
 {
@@ -188,7 +182,6 @@ EXTERN struct zstring *new_zstring(char *s, size_t size)
 ////   zvalue
 ////////////////////
 
-
 EXTERN struct zvalue uninit_zvalue = ZVINIT(0, 0.0, 0);
 
 // This will be reassigned in init_globals() with an empty string.
@@ -221,8 +214,8 @@ static size_t zlist_append_zvalue(struct zlist *p, struct zvalue *v)
   return (p->avail - p->base - p->size) / p->size;  // offset of updated slot
 }
 
-// push_val() is used for initializing globals (see compile:init_compiler())
-// but mostly used in run.h
+// push_val() is used for initializing globals (see init_compiler())
+// but mostly used in runtime
 // WARNING: push_val may change location of v, so do NOT depend on it after!
 // Note the incr refcnt used to be after the zlist_append, but that caused a
 // heap-use-after-free error when the zlist_append relocated the zvalue being
@@ -254,7 +247,6 @@ EXTERN void zvalue_dup_zstring(struct zvalue *v)
 ////////////////////
 ////   zmap (array) implementation
 ////////////////////
-
 
 EXTERN int zstring_match(struct zstring *a, struct zstring *b)
 {
@@ -343,7 +335,6 @@ EXTERN void zmap_delete_map(struct zmap *m)
   zmap_init(m);
 }
 
-
 static void zmap_rehash(struct zmap *m)
 {
   // New table is twice the size of old.
@@ -368,8 +359,6 @@ static void zmap_rehash(struct zmap *m)
   m->hash = h;
   m->limit = 2 * size * 8 / 10;
 }
-
-
 
 EXTERN struct zmap_slot *zmap_find_or_insert_key(struct zmap *m, struct zstring *key)
 {

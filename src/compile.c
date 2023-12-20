@@ -32,7 +32,6 @@ static int havetok(int tk)
   return 1;
 }
 
-
 //// code and "literal" emitters
 static void gen2cd(int op, int n)
 {
@@ -513,7 +512,6 @@ static void var(void)
     gen2cd(tkvar, slotnum);
   }
 }
-
 
 // FIXME  FIXME  FIXME  FIXME
 //
