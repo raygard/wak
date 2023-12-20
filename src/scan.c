@@ -350,38 +350,22 @@ static void scan_opt_div(int div_op_allowed_here)
   do ascan_opt_div(div_op_allowed_here); while (TT.scs->tok == tkerr);
 }
 
-#define DIV_ALLOWED 1
-
-// Used when scanning in context where '/' means div not regex.
-// Standard says that's wherever / or /= can mean divide.
-static void scan_div_ok(void)
-{
-  scan_opt_div(DIV_ALLOWED);
-}
-
-// Used when scanning in context where '/' means regex.
-static void scan_regex_ok(void)
-{
-  scan_opt_div(! DIV_ALLOWED);
-}
-
 EXTERN void init_scanner(void)
 {
+  TT.prevtok = tkeof;
   gch();
 }
 
+// POSIX says '/' does not begin a regex wherever '/' or '/=' can mean divide.
+// Pretty sure if / or /= comes after these, it means divide:
 static char div_preceders[] = {tknumber, tkstring, tkvar, tkgetline, tkrparen, tkrbracket, tkincr, tkdecr, 0};
 
-EXTERN char *tokstr = 0;
-
-static int prevscstok = tkeof; // Only for checking if div op can appear next
-EXTERN int prevtok = tkeof; // For checking end of prev statement for termination
+// For checking end of prev statement for termination and if '/' can come next
 
 EXTERN void scan(void)
 {
-  prevtok = TT.scs->tok;
-  if (prevtok && strchr(div_preceders, prevtok)) scan_div_ok();
-  else scan_regex_ok();
-  prevscstok = TT.scs->tok;
-  tokstr = TT.scs->tokstr;
+  TT.prevtok = TT.scs->tok;
+  if (TT.prevtok && strchr(div_preceders, TT.prevtok)) scan_opt_div(1);
+  else scan_opt_div(0);
+  TT.tokstr = TT.scs->tokstr;
 }

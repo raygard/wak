@@ -130,17 +130,17 @@ static int find_or_add_var_name(void)
 {
   int slotnum = 0;    // + means global; - means local to function
   int globals_ent = 0;
-  int locals_ent = find_local_entry(tokstr);   // in local symbol table?
+  int locals_ent = find_local_entry(TT.tokstr);   // in local symbol table?
   if (locals_ent) {
     slotnum = -LOCAL[locals_ent].slotnum;
   } else {
-    globals_ent = find_global(tokstr);
-    if (!globals_ent) globals_ent = add_global(tokstr);
+    globals_ent = find_global(TT.tokstr);
+    if (!globals_ent) globals_ent = add_global(TT.tokstr);
     slotnum = GLOBAL[globals_ent].slotnum;
-    if (find_func_def_entry(tokstr))
+    if (find_func_def_entry(TT.tokstr))
       // POSIX: The same name shall not be used both as a variable name
       // with global scope and as the name of a function.
-      xerr("var '%s' used as function name\n", tokstr);
+      xerr("var '%s' used as function name\n", TT.tokstr);
   }
   return slotnum;
 }
@@ -268,20 +268,20 @@ static void complain(int tk, int lno)
     return;
   }
   recovering = 1;
-  if (strcmp(tokstr, "\n") == 0) tokstr = "<newline>";
+  if (strcmp(TT.tokstr, "\n") == 0) TT.tokstr = "<newline>";
   if (tksemi <= tk && tk <= tkpipe) {
     char op[3];
     get_token_text(op, tk);
-    xerr("(%d) syntax near '%s' -- '%s' expected\n", lno, tokstr, op);
+    xerr("(%d) syntax near '%s' -- '%s' expected\n", lno, TT.tokstr, op);
   } else if (tk >= tkin && tk <= tksubstr) {
     char tkstr[10];
     if (tk < tkatan2) memmove(tkstr, keywords + 1 + 10 * (tk - tkin), 10);
     else memmove(tkstr, builtins + 1 + 10 * (tk - tkatan2), 10);
     *strchr(tkstr, ' ') = 0;
-    xerr("(%d) syntax near '%s' -- '%s' expected\n", lno, tokstr, tkstr);
+    xerr("(%d) syntax near '%s' -- '%s' expected\n", lno, TT.tokstr, tkstr);
   } else {
     // FIXME FIXME make better
-    xerr("(%d) syntax near '%s' (%d)\n", lno, tokstr, tk);
+    xerr("(%d) syntax near '%s' (%d)\n", lno, TT.tokstr, tk);
   }
 }
 
@@ -393,7 +393,7 @@ static void builtin_call(int tk, char *builtin_name)
     case tksub:
     case tkgsub:
       if (istok(tkregex)) {
-        gen2cd(tkregex, make_literal_regex_val(tokstr));
+        gen2cd(tkregex, make_literal_regex_val(TT.tokstr));
         scan();
       } else expr();
       expect(tkcomma);
@@ -413,7 +413,7 @@ static void builtin_call(int tk, char *builtin_name)
       expect(tkcomma);
       optional_nl();
       if (istok(tkregex)) {
-        gen2cd(tkregex, make_literal_regex_val(tokstr));
+        gen2cd(tkregex, make_literal_regex_val(TT.tokstr));
         scan();
       } else expr();
       num_args = 2;
@@ -434,7 +434,7 @@ static void builtin_call(int tk, char *builtin_name)
       num_args = 2;
       if (have_comma()) {
         if (istok(tkregex)) {
-          gen2cd(tkregex, make_literal_regex_val(tokstr));
+          gen2cd(tkregex, make_literal_regex_val(TT.tokstr));
           scan();
         } else expr();
         num_args++;
@@ -478,13 +478,13 @@ static void function_call(void)
   char builtin_name[16];  // be sure it's long enough for all builtins
   if (istok(tkbuiltin)) {
     functk = TT.scs->tokbuiltin;
-    strcpy(builtin_name, tokstr);
+    strcpy(builtin_name, TT.tokstr);
   } else if (istok(tkfunc)) { // user function
-    funcnum = find_func_def_entry(tokstr);
-    if (!funcnum) funcnum = add_func_def_entry(tokstr);
+    funcnum = find_func_def_entry(TT.tokstr);
+    if (!funcnum) funcnum = add_func_def_entry(TT.tokstr);
     FUNC_DEF[funcnum].flags |= FUNC_CALLED;
     gen2cd(opprepcall, funcnum);
-  } else error_exit("bad function %s!", tokstr);
+  } else error_exit("bad function %s!", TT.tokstr);
   scan();
   // length() can appear without parens
   int num_args = 0;
@@ -518,7 +518,7 @@ static void function_call(void)
 
 static void var(void)
 {
-  // var name is in tokstr
+  // var name is in TT.tokstr
   // slotnum: + means global; - means local to function
   int slotnum = find_or_add_var_name();
   scan();
@@ -619,7 +619,7 @@ static void lvalue(void)
     var();
     convert_push_to_reference();
   } else {
-    xerr("syntax near '%s' (bad lvalue)\n", tokstr);
+    xerr("syntax near '%s' (bad lvalue)\n", TT.tokstr);
   }
 }
 
@@ -668,7 +668,7 @@ static int primary(void)
       break;
 
     case tkstring:
-      gen2cd(tkstring, make_literal_str_val(tokstr));
+      gen2cd(tkstring, make_literal_str_val(TT.tokstr));
       scan();
       break;
 
@@ -678,7 +678,7 @@ static int primary(void)
       // the built-in function arguments described below, the value of
       // the resulting expression shall be the equivalent of: $0 ~ /ere/
       // FIXME TODO
-      gen2cd(opmatchrec, make_literal_regex_val(tokstr));
+      gen2cd(opmatchrec, make_literal_regex_val(TT.tokstr));
       scan();
       break;
 
@@ -743,7 +743,7 @@ static int primary(void)
       break;
 
     default:
-      xerr("syntax near '%s'\n", tokstr[0] == '\n' ? "\\n" : tokstr);
+      xerr("syntax near '%s'\n", TT.tokstr[0] == '\n' ? "\\n" : TT.tokstr);
       skip_to(stmtendsy);
       break;
   }
@@ -848,7 +848,7 @@ static void exprn(int rbp)
   // immediately follows print or printf, where it may still be followed
   // by 'in' ... unless at end of statement
   if (opnd_st > 0 && ! istok(tkin))
-    xerr("syntax near '%s'; expected 'in'\n", tokstr);
+    xerr("syntax near '%s'; expected 'in'\n", TT.tokstr);
   if (opnd_st > 0) gen2cd(tkrbracket, opnd_st);
   // primary() has eaten subscripts, function args, postfix ops.
   // curtok() should be a binary op.
@@ -871,7 +871,7 @@ static void exprn(int rbp)
       lev--;
       return;
     }
-    xerr("syntax near '%s'\n", tokstr[0] == '\n' ? "\\n" : tokstr);
+    xerr("syntax near '%s'\n", TT.tokstr[0] == '\n' ? "\\n" : TT.tokstr);
     skip_to(stmtendsy);
   }
   if (cat_start_concated_expr(optor)) optor = tkcat;
@@ -962,14 +962,14 @@ static void simple_stmt(void)
 
     default:
       // FIXME error recovery needed! see testbad.awk
-      xerr("syntax near '%s'\n", tokstr[0] == '\n' ? "\\n" : tokstr);
+      xerr("syntax near '%s'\n", TT.tokstr[0] == '\n' ? "\\n" : TT.tokstr);
       skip_to(stmtendsy);
   }
 }
 
 static int prev_was_terminated(void)
 {
-  return !!strchr(stmtendsy, prevtok);
+  return !!strchr(stmtendsy, TT.prevtok);
 }
 
 static int is_nl_semi(void)
@@ -1051,7 +1051,7 @@ static void do_stmt(void)
       scan();
       optional_nl();
     } else {
-      xerr("syntax near '%s' -- ';' or newline expected\n", tokstr);
+      xerr("syntax near '%s' -- ';' or newline expected\n", TT.tokstr);
       // FIXME
     }
   }
@@ -1244,17 +1244,17 @@ static void add_param(int funcnum, char *s)
 static void function_def(void)
 {
   expect(tkfunction);
-  int funcnum = find_func_def_entry(tokstr);
+  int funcnum = find_func_def_entry(TT.tokstr);
   if (!funcnum) {
-    funcnum = add_func_def_entry(tokstr);
+    funcnum = add_func_def_entry(TT.tokstr);
   } else if (FUNC_DEF[funcnum].flags & FUNC_DEFINED) {
-    xerr("dup defined function '%s'\n", tokstr);
+    xerr("dup defined function '%s'\n", TT.tokstr);
   }
   FUNC_DEF[funcnum].flags |= FUNC_DEFINED;
-  if (find_global(tokstr)) {
+  if (find_global(TT.tokstr)) {
     // POSIX: The same name shall not be used both as a variable name with
     // global scope and as the name of a function.
-    xerr("function name '%s' previously defined\n", tokstr);
+    xerr("function name '%s' previously defined\n", TT.tokstr);
   }
 
   gen2cd(tkfunction, funcnum);
@@ -1265,11 +1265,11 @@ static void function_def(void)
   else expect(tkvar);  // func name with space before (
   expect(tklparen);
   if (istok(tkvar)) {
-    add_param(funcnum, tokstr);
+    add_param(funcnum, TT.tokstr);
     scan();
-    // FIXME is the the best way? what if tokstr not a tkvar?
+    // FIXME is the the best way? what if TT.tokstr not a tkvar?
     while (have_comma()) {
-      add_param(funcnum, tokstr);
+      add_param(funcnum, TT.tokstr);
       expect(tkvar);
     }
   }
@@ -1282,7 +1282,7 @@ static void function_def(void)
     gen2cd(tknumber, make_uninit_val());
     gen2cd(tkreturn, TT.cgl.nparms);
   } else {
-    xerr("syntax near '%s'\n", tokstr);
+    xerr("syntax near '%s'\n", TT.tokstr);
     // FIXME some recovery needed here!?
   }
   // Do not re-init locals table for dup function.
@@ -1312,7 +1312,7 @@ static void action(int action_type)
     //   !!!   if (istok(tkrbrace) || prev_was_terminated())
     if (prev_was_terminated()) continue;
     if (!is_nl_semi() && !istok(tkrbrace)) {
-      xerr("syntax near '%s' -- newline, ';', or '}' expected\n", tokstr);
+      xerr("syntax near '%s' -- newline, ';', or '}' expected\n", TT.tokstr);
       while (!is_nl_semi() && !istok(tkrbrace) && !istok(tkeof)) scan();
       if (istok(tkeof)) error_exit("(%d:) unexpected EOF\n", __LINE__);
     }

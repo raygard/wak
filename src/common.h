@@ -55,7 +55,9 @@
 #define ATTR_FALLTHROUGH_INTENDED
 #endif
 
-#define MAX(a,b) ((a)>(b)?(a):(b))
+#ifndef FOR_TOYBOX
+#define maxof(a,b) ((a)>(b)?(a):(b))
+#endif  // FOR_TOYBOX
 
 ////////////////////
 ////   declarations
@@ -154,6 +156,9 @@ struct zfile {
 // Global data
 struct global_data {
   struct scanner_state *scs;
+  char *tokstr;
+  // For checking end of prev statement for termination and if '/' can come next
+  int prevtok;
   struct zlist globals_table;      // global symbol table
   struct zlist locals_table;       // local symbol table
   struct zlist func_def_table;     // function symbol table
@@ -369,8 +374,6 @@ EXTERN struct zvalue uninit_string_zvalue;
 EXTERN char *ops, *keywords, *builtins;
 EXTERN char *toknames[];
 
-EXTERN char *tokstr;
-EXTERN int prevtok;            // For checking end of previous statement for termination
 
 EXTERN int trace_sw;
 EXTERN int opt_print_source;
