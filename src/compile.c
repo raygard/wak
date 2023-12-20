@@ -147,7 +147,7 @@ static int find_or_add_var_name(void)
 
 //// END Symbol tables functions
 
-// Special variables (POSIX)
+// Special variables (POSIX). Must align with enum spec_var_names
 static char *spec_vars[] = { "ARGC", "ARGV", "CONVFMT", "ENVIRON", "FILENAME",
     "FNR", "FS", "NF", "NR", "OFMT", "OFS", "ORS", "RLENGTH", "RS", "RSTART",
     "SUBSEP", 0};
@@ -195,47 +195,23 @@ static void init_compiler(void)
 
 //// Parsing and compiling to TT.zcode
 // Left binding powers
-static int lbp_table[] = {
-  // tkunusedtoken, tkeof, tkerr, tknl,
-  0, 0, 0, 0,
-  // tkvar, tknumber, tkstring, tkregex, tkfunc, tkbuiltin,
-  250, 250, 250, 250, 250, 250,
-  // static char *ops = " ;  ,  [  ]  (  )  {  }  $  ++ -- ^  !  *  /  %  +  -     "
-  //         "<  <= != == >  >= ~  !~ && || ?  :  ^= %= *= /= += -= =  >> |  ";
-  // tksemi, tkcomma,
-  0, 0,
-  // tklbracket, tkrbracket, tklparen, tkrparen, tklbrace, tkrbrace,
-  210, 0, 200, 0, 0, 0,
-  // tkfield,
-  190,
-  // tkincr, tkdecr,
-  180, 180,
-  // tkpow,
-  170,
-  // tknot,
-  160,
-  // tkmul, tkdiv, tkmod,
-  150, 150, 150,
-  // tkplus, tkminus,
-  140, 140,
-  // tkcat, // !!! FAKE (?) operator for concatenation (just adjacent string exprs)
-  130,
-  // tklt, tkle, tkne, tkeq, tkgt, tkge,
-  110, 110, 110, 110, 110, 110,
-  // tkmatchop, tknotmatch,
-  100, 100,
-  // tkand,
-  80,
-  // tkor,
-  70,
-  // tkternif, tkternelse,
-  60, 0,
-  // tkpowasgn, tkmodasgn, tkmulasgn, tkdivasgn, tkaddasgn, tksubasgn, tkasgn,
-  50, 50, 50, 50, 50, 50, 50,
-  // tkappend, tkpipe,
-  0, 120,
-  // tkin
-  90
+static int lbp_table[] = {  // Must align with enum Toks
+  0, 0, 0, 0,     // tkunusedtoken, tkeof, tkerr, tknl,
+  250, 250, 250,  // tkvar, tknumber, tkstring,
+  250, 250, 250,  // tkregex, tkfunc, tkbuiltin,
+  0, 0, 210, 0, // tksemi, tkcomma, tklbracket, tkrbracket, 
+  200, 0, 0, 0, // tklparen, tkrparen, tklbrace, tkrbrace,
+  190, 180, 180, 170, 160, // tkfield, tkincr, tkdecr, tkpow, tknot,
+  150, 150, 150, 140, 140, // tkmul, tkdiv, tkmod, tkplus, tkminus,
+  130, // tkcat, // FAKE (?) optor for concatenation (adjacent string exprs)
+  110, 110, 110, 110, 110, 110, // tklt, tkle, tkne, tkeq, tkgt, tkge,
+  100, 100, // tkmatchop, tknotmatch,
+  80, 70, // tkand, tkor,
+  60, 0, // tkternif, tkternelse,
+  50, 50, 50, 50,   // tkpowasgn, tkmodasgn, tkmulasgn, tkdivasgn,
+  50, 50, 50, // tkaddasgn, tksubasgn, tkasgn,
+  0, 120, // tkappend, tkpipe,
+  90 // tkin
 };
 
 static int getlbp(int tok)

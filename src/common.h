@@ -201,7 +201,8 @@ enum Toktypes {
 
 // NOTE: nextfile, fflush NOT POSIX or in book
 
-enum Toks {
+// Must align with lbp_table[]
+enum tokens {
     tkunusedtoken, tkeof, tkerr, tknl,
     tkvar, tknumber, tkstring, tkregex, tkfunc, tkbuiltin,
 
@@ -234,7 +235,7 @@ enum Toks {
     tksub, tkgsub, tksprintf, tksubstr, tklasttk
     };
 
-enum Opcodes {
+enum opcodes {
     opunusedop = tklasttk,
     opvarref, opmapref, opfldref, oppush, opdrop, opdrop_n, opnotnot,
     oppreincr, oppredecr, oppostincr, oppostdecr, opnegate, opjump, opjumptrue,
@@ -242,7 +243,7 @@ enum Opcodes {
     opquit, opprintrec, oprange1, oprange2, oprange3, oplastop
 };
 
-// Special variables (POSIX)
+// Special variables (POSIX). Must align with char *spec_vars[]
 enum spec_var_names { ARGC=1, ARGV, CONVFMT, ENVIRON, FILENAME, FNR, FS, NF,
     NR, OFMT, OFS, ORS, RLENGTH, RS, RSTART, SUBSEP };
 

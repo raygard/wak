@@ -14,6 +14,7 @@
 EXTERN struct global_data TT;
 #endif  // FOR_TOYBOX
 
+// These (ops, keywords, builtins) must align with enum tokens
 EXTERN char *ops = " ;  ,  [  ]  (  )  {  }  $  ++ -- ^  !  *  /  %  +  -  .. "
         "<  <= != == >  >= ~  !~ && || ?  :  ^= %= *= /= += -= =  >> |  ";
 
