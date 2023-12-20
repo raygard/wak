@@ -1,4 +1,4 @@
-FNR<5 { next }
+FNR<6 { next }
 #/#if MODULAR/, /#endif/ { next }
 /#ifndef MONO/, /#endif.*MONO/ { next }
 /#include "/ { next }
