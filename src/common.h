@@ -58,6 +58,10 @@
 #ifndef FOR_TOYBOX
 #define maxof(a,b) ((a)>(b)?(a):(b))
 
+struct arg_list {
+  struct arg_list *next;
+  char *arg;
+};
 #endif  // FOR_TOYBOX
 ////////////////////
 ////   declarations
@@ -69,9 +73,7 @@
 struct scanner_state {
     char *p;
     char *progstring;
-    int num_progfiles;
-    char **progfiles;
-    int cur_progfile;
+    struct arg_list *prog_args;
     char *filename;
     char *line;
     size_t line_size;
@@ -417,7 +419,8 @@ EXTERN void zmap_delete_map_incl_slotdata(struct zmap *m);
 EXTERN void zmap_delete_map(struct zmap *m);
 EXTERN struct zmap_slot *zmap_find_or_insert_key(struct zmap *m, struct zstring *key);
 EXTERN void zmap_delete(struct zmap *m, struct zstring *key);
-EXTERN void run(int optind, int argc, char **argv, char *sepstring, int num_assignments, char **assignments, char **envp);
+EXTERN void run(int optind, int argc, char **argv, char *sepstring,
+    struct arg_list *assign_args, char **envp);
 
 #endif // MONOLITHIC
 #undef EXTERN

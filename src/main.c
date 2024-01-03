@@ -9,15 +9,12 @@
 //// main
 ////////////////////
 
-static void progfiles_init(char *progstring, char **progfiles,
-    int num_progfiles)
+static void progfiles_init(char *progstring, struct arg_list *prog_args)
 {
 
   TT.scs->p = progstring ? progstring : "  " + 2;
   TT.scs->progstring = progstring;
-  TT.scs->num_progfiles = num_progfiles;
-  TT.scs->progfiles = progfiles;
-  TT.scs->cur_progfile = 0;
+  TT.scs->prog_args = prog_args;
   TT.scs->filename = "(None)";  // Not needed...
   TT.scs->line = 0;      // for getline()
   TT.scs->line_size = 0; // for getline()
@@ -36,16 +33,15 @@ static void progfiles_init(char *progstring, char **progfiles,
   TT.scs->error = 0;
 }
 
-static int awk(char *sepstring, int num_assignments, char **assignments,
-    int num_progfiles, char **progfiles, char *progstring, int optind,
-    int argc, char **argv, int opt_test_scanner, int opt_dump_symbols,
-    int opt_run_prog, char **envp)
+static int awk(char *sepstring, char *progstring, struct arg_list *prog_args,
+    struct arg_list *assign_args, int optind, int argc, char **argv,
+    int opt_run_prog, char **envp, int opt_test_scanner, int opt_dump_symbols)
 {
 (void)opt_test_scanner, (void)opt_dump_symbols;
   struct scanner_state ss = {0};
   TT.scs = &ss;
 
-  progfiles_init(progstring, progfiles, num_progfiles);
+  progfiles_init(progstring, prog_args);
   compile();
 
   if (TT.cgl.compile_error_count)
@@ -53,7 +49,7 @@ static int awk(char *sepstring, int num_assignments, char **assignments,
         TT.cgl.compile_error_count == 1 ? "" : "s");
   else {
     if (opt_run_prog)
-      run(optind, argc, argv, sepstring, num_assignments, assignments, envp);
+      run(optind, argc, argv, sepstring, assign_args, envp);
   }
 
   return TT.cgl.compile_error_count;
@@ -61,6 +57,21 @@ static int awk(char *sepstring, int num_assignments, char **assignments,
 
 EXTERN int trace_sw = 0;
 #ifndef FOR_TOYBOX
+
+static struct arg_list **new_arg(struct arg_list **pnext, char *arg)
+{
+  *pnext = xzalloc(sizeof(**pnext));
+  (*pnext)->arg = arg;
+  return &(*pnext)->next;
+}
+
+static void free_args(struct arg_list *p)
+{
+  for (struct arg_list *np; p; p = np) {
+    np = p->next;
+    xfree(p);
+  }
+}
 
 int main(int argc, char **argv, char **envp)
 {
@@ -80,14 +91,15 @@ int main(int argc, char **argv, char **envp)
   TT.progname = argv[0];
   char *sepstring = " ";
   // FIXME Need check on these, or use dynamic mem.
-  int num_assignments = 0, num_progfiles = 0;
-  char *assignments[42];
-  char *progfiles[42];
   char *progstring = 0;
   int opt_test_scanner = 0;
   int opt_dump_symbols = 0;
   int opt_run_prog = 1;
   int opt;
+  int retval;
+
+  struct arg_list *prog_args = 0, **tail_prog_args = &prog_args;
+  struct arg_list *assign_args = 0, **tail_assign_args = &assign_args;
 
   while ((opt = getopt(argc, argv, ":F:f:v:tsVzdD:pr")) != -1) {
     switch (opt) {
@@ -95,10 +107,10 @@ int main(int argc, char **argv, char **envp)
         sepstring = escape_str(optarg);
         break;
       case 'f':
-        progfiles[num_progfiles++] = optarg;
+        tail_prog_args = new_arg(tail_prog_args, optarg);
         break;
       case 'v':
-        assignments[num_assignments++] = optarg;
+        tail_assign_args = new_arg(tail_assign_args, optarg);
         break;
       case 'V':
         printf("<%s %s>\n", __DATE__, __TIME__);
@@ -114,7 +126,7 @@ int main(int argc, char **argv, char **envp)
     }
   }
 
-  if (num_progfiles == 0) {
+  if (!prog_args) {
     if (optind >= argc) {
       fprintf(stderr, "No program string.\n%s", usage);
       exit(EXIT_FAILURE);
@@ -131,8 +143,10 @@ int main(int argc, char **argv, char **envp)
       newlocale(LC_CTYPE_MASK, "en_US.UTF-8", 0));
 #endif
 
-  return awk(sepstring, num_assignments, assignments, num_progfiles, progfiles,
-      progstring, optind, argc, argv, opt_test_scanner, opt_dump_symbols,
-      opt_run_prog, envp);
+  retval = awk(sepstring, progstring, prog_args, assign_args, optind, argc, argv,
+      opt_run_prog, envp, opt_test_scanner, opt_dump_symbols);
+  free_args(assign_args);
+  free_args(prog_args);
+  return retval;
 }
 #endif  // FOR_TOYBOX

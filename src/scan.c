@@ -20,7 +20,8 @@
 
 static void progfile_open(void)
 {
-  TT.scs->filename = TT.scs->progfiles[TT.scs->cur_progfile];
+  TT.scs->filename = TT.scs->prog_args->arg;
+  TT.scs->prog_args = TT.scs->prog_args->next;
   TT.scs->fp = stdin;
   if (strcmp(TT.scs->filename, "-")) TT.scs->fp = fopen(TT.scs->filename, "r");
   if (!TT.scs->fp) error_exit("Can't open %s.\n", TT.scs->filename);
@@ -61,8 +62,7 @@ static int get_char(void)
     fclose(TT.scs->fp);
     TT.scs->fp = 0;
     TT.scs->p = "  " + 2;
-    TT.scs->cur_progfile++;
-    if (TT.scs->cur_progfile >= TT.scs->num_progfiles) {
+    if (!TT.scs->prog_args) {
       xfree(TT.scs->line);
       if (lastchar == '\n') return EOF;
       // Fake final newline

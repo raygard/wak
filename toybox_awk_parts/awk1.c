@@ -1,7 +1,7 @@
 /* awk.c - An awk implementation.
  * vi: tabstop=2 softtabstop=2 shiftwidth=2
  *
- * Copyright 2023 Ray Gardner <raygard@gmail.com>
+ * Copyright 2024 Ray Gardner <raygard@gmail.com>
  *
  * See https://pubs.opengroup.org/onlinepubs/9699919799/utilities/awk.html
 
@@ -28,9 +28,7 @@ GLOBALS(
   struct scanner_state {
       char *p;
       char *progstring;
-      int num_progfiles;
-      char **progfiles;
-      int cur_progfile;
+      struct arg_list *prog_args;
       char *filename;
       char *line;
       size_t line_size;
@@ -131,8 +129,5 @@ GLOBALS(
     char file_or_pipe;  // f or p
     char is_std_file;
   } *zfiles;
-
 )
-
-#define FOR_TOYBOX
 

@@ -1859,7 +1859,8 @@ static void insert_argv_map(struct zvalue *map, int key, char *value)
   check_numeric_string(v);
 }
 
-static void init_globals(int optind, int argc, char **argv, char *sepstring, int num_assignments, char **assignments, char **envp)
+static void init_globals(int optind, int argc, char **argv, char *sepstring,
+    struct arg_list *assign_args, char **envp)
 {
   // Global variables reside at the bottom of the TT.stack. Start with the awk
   // "special variables":  ARGC, ARGV, CONVFMT, ENVIRON, FILENAME, FNR, FS, NF,
@@ -1942,8 +1943,8 @@ static void init_globals(int optind, int argc, char **argv, char *sepstring, int
   }
 
   // Init -v assignment options.
-  for (int k = 0; k < num_assignments; k++) {
-    char *asgn = assignments[k];
+  for (struct arg_list *p = assign_args; p; p = p->next) {
+    char *asgn = p->arg;
     char *val = strchr(asgn, '=');
     if (!val) error_exit("bad -v assignment format\n");
     *val++ = '\0';
@@ -1969,10 +1970,11 @@ static void free_literal_regex(void)
     if (is_rx(&LITERAL[k])) regfree(LITERAL[k].rx);
 }
 
-EXTERN void run(int optind, int argc, char **argv, char *sepstring, int num_assignments, char **assignments, char **envp)
+EXTERN void run(int optind, int argc, char **argv, char *sepstring,
+    struct arg_list *assign_args, char **envp)
 {
   char *printf_fmt_rx = "%[-+ #0]*([*]|[0-9]*)([.]([*]|[0-9]*))?[aAdiouxXfFeEgGcs%]";
-  init_globals(optind, argc, argv, sepstring, num_assignments, assignments, envp);
+  init_globals(optind, argc, argv, sepstring, assign_args, envp);
   init_field_rx();
   rx_compile_or_die(&TT.rx_printf_fmt, printf_fmt_rx);
   new_file("-", stdin, 'r', 'f')->is_std_file = 1;
