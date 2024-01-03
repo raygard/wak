@@ -198,7 +198,7 @@ static int lbp_table[] = {  // Must align with enum Toks
   0, 0, 0, 0,     // tkunusedtoken, tkeof, tkerr, tknl,
   250, 250, 250,  // tkvar, tknumber, tkstring,
   250, 250, 250,  // tkregex, tkfunc, tkbuiltin,
-  0, 0, 210, 0, // tksemi, tkcomma, tklbracket, tkrbracket, 
+  0, 0, 210, 0, // tksemi, tkcomma, tklbracket, tkrbracket,
   200, 0, 0, 0, // tklparen, tkrparen, tklbrace, tkrbrace,
   190, 180, 180, 170, 160, // tkfield, tkincr, tkdecr, tkpow, tknot,
   150, 150, 150, 140, 140, // tkmul, tkdiv, tkmod, tkplus, tkminus,

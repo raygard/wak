@@ -64,7 +64,7 @@ CFLAGS = -O3 -funsigned-char -std=c99 -Wall -Wextra -W -Wpointer-arith -Wstrict-
 	@mkdir -p $(@D)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-./asan/wak: LDFLAGS = -flto -lm -Xlinker -Map=./objects/link.map -fsanitize=address
+./asan/wak: LDFLAGS = -flto -lm -Xlinker -Map=./asanobjects/link.map -fsanitize=address
 ./asan/wak: $(ASANOBJS)
 	@mkdir -p $(@D)
 	$(CC) $(CFLAGS) $^ -o $@ $(LDFLAGS)
@@ -138,6 +138,7 @@ clean :
 	-rm ./mono/wak
 	-rm ./musl/wak
 	-rm ./win/wak.exe
+	-rm ./toybox/*
 	-rm ./objects/* ./asanobjects/* ./profobjects/* ./monoobjects/* ./muslobjects/* ./winobjects/* ./monosrc/*
 
 foo:

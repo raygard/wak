@@ -147,10 +147,12 @@ struct zlist {
 };
 
 struct zfile {
-  struct zstring *fn;
+  struct zfile *next;
+  char *fn;
   FILE *fp;
   char mode;  // w, a, or r
   char file_or_pipe;  // f or p
+  char is_std_file;
 };
 
 // Global data
@@ -185,10 +187,7 @@ struct global_data {
   int nf_internal;  // should match NF
   char range_sw[64];   // FIXME TODO quick and dirty set of range switches
   int file_cnt, std_file_cnt;
-  // TODO FIXME This is set pretty high (1010) to pass T.overflow test of 1000
-  // open files; files[] is 24240 bytes. Maybe should be allocated dynamically?
-#define MAX_FILES 1010
-  struct zfile files[MAX_FILES];
+  struct zfile *zfiles;
   regex_t rx_printf_fmt;
 };
 #endif  // FOR_TOYBOX

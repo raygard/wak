@@ -570,57 +570,56 @@ static struct zvalue *setup_lvalue(int n, int parmbase, int *field_num)
   return v;
 }
 
-static void setup_std_file(char *fn, FILE *fp, char *mode)
+static struct zfile *new_file(char *fn, FILE *fp, char mode, char f_or_p)
 {
-  TT.files[TT.file_cnt++] = (struct zfile){new_zstring(fn, strlen(fn)), fp, *mode, 'f'};
-  TT.std_file_cnt = TT.file_cnt;
+  struct zfile *f = xzalloc(sizeof(struct zfile));
+  *f = (struct zfile){TT.zfiles, xstrdup(fn), fp, mode, f_or_p, 0};
+  return TT.zfiles = f;
 }
 
 static int fflush_all(void)
 {
-  for (int k = 0; k < TT.file_cnt; k++) {
-    struct zfile *zof = &TT.files[k];
-    if (fflush(zof->fp)) return -1;
-  }
-  return 0;
+  int ret = 0;
+  for (struct zfile *p = TT.zfiles; p; p = p->next)
+    if (fflush(p->fp)) ret = -1;
+  return ret;
 }
 
 static int fflush_file(int nargs)
 {
   if (!nargs) return fflush_all();
+
   val_to_str(STKP);   // filename at top of TT.stack
   // Null string means flush all
   if (!STKP[0].vst->str[0]) return fflush_all();
+
   // is it open in file table?
-  for (int k = 0; k < TT.file_cnt; k++) {
-    struct zfile *zof = &TT.files[k];
-    if (zstring_match(STKP[0].vst, zof->fn)) {
-      // if (zof->file_or_pipe == 'f' && fflush(zof->fp) == 0)
-      //   return 0;  // otherwise assume fail
-      // return -1;
-      if (fflush(zof->fp) == 0) return 0;
-    }
-  }
-  return -1;    // file not found in table
+  for (struct zfile *p = TT.zfiles; p; p = p->next)
+    if (!strcmp(STKP[0].vst->str, p->fn))
+      if (!fflush(p->fp)) return 0;
+  return -1;    // error, or file not found in table
 }
 
 static int close_file(void)
 {
   val_to_str(STKP);   // filename at top of TT.stack
   // is it open in file table?
-  for (int k = 0; k < TT.file_cnt; k++) {
-    struct zfile *zof = &TT.files[k];
-    if (zstring_match(STKP[0].vst, zof->fn)) {
-      if (!zof->fp || (zof->file_or_pipe == 'f' ? fclose : pclose)(zof->fp) < 0)
-        return -1;  // otherwise assume successful close
-      if (k < TT.std_file_cnt) return 0;
-      // close hole in table if not last slot
-      if (k < --TT.file_cnt) TT.files[k] = TT.files[TT.file_cnt];
+  struct zfile **pp = &TT.zfiles;
+  for (struct zfile *p = TT.zfiles; p; pp = &p->next, p = p->next)
+    if (!strcmp(STKP[0].vst->str, p->fn)) {
+      if (!p->fp || (p->file_or_pipe == 'f' ? fclose : pclose)(p->fp) < 0)
+        return -1;  // if not returning, assume close was OK
+      if (!p->is_std_file) { // don't unlink stdout, stderr, etc.
+        *pp = p->next;  // unlink non "std" file from list
+        xfree(p->fn);
+        xfree(p);
+      }
       return 0;
     }
-  }
   return -1;    // file not found in table
 }
+
+static FILE *badfile = (void *)"";
 
 // FIXME TODO check if file/pipe/mode matches what's in the table already.
 // Apparently gawk/mawk/nawk are OK with different mode, but just use the file
@@ -628,33 +627,22 @@ static int close_file(void)
 static FILE *setup_file(char *file_or_pipe, char *mode)
 {
   val_to_str(STKP);   // filename at top of TT.stack
-  struct zfile *zof = 0;
+  char *fn = STKP[0].vst->str;
   // is it already open in file table?
-  for (int k = 0; k < TT.file_cnt; k++) {
-    zof = &TT.files[k];
-    if (zstring_match(STKP[0].vst, zof->fn)) {
+  for (struct zfile *p = TT.zfiles; p; p = p->next)
+    if (!strcmp(fn, p->fn)) {
       drop();
-      return zof->fp;   // open; return it
+      return p->fp;   // open; return it
     }
+  FILE *fp = (*file_or_pipe == 'f' ? fopen : popen)(fn, mode);
+  if (fp) {
+    struct zfile *p = new_file(fn, fp, *mode, *file_or_pipe);
+    drop();
+    return p->fp;
   }
-  // Open and put in table
-  if (TT.file_cnt >= MAX_FILES) fatal("too many open output TT.files!\n");
-  zof = &TT.files[TT.file_cnt];
-  TT.file_cnt++;
-  zof->fn = STKP[0].vst;
-  zstring_incr_refcnt(zof->fn);
+  if (*mode != 'r') ffatal("cannot open '%s'\n", fn);
   drop();
-  zof->fp = (*file_or_pipe == 'f' ? fopen : popen)(zof->fn->str, mode);
-  if (*mode != 'r' && !zof->fp) ffatal("cannot open '%s'\n", zof->fn->str);
-  zof->file_or_pipe = *file_or_pipe;
-  zof->mode = *mode;
-  return zof->fp;
-}
-
-static FILE *setup_outfile(char *file_or_pipe, char *mode)
-{
-  FILE *fp = setup_file(file_or_pipe, mode);
-  return fp;
+  return badfile;
 }
 
 static int getcnt(int k)
@@ -716,7 +704,7 @@ static void varprint(int(*fpvar)(FILE *, const char *, ...), FILE *outfp, int na
     for (char *p = strchr(fmt, '*'); p; p = strchr(p+1, '*'))
       nargsneeded++;
     nargsneeded -= fmtc == '%';
-    
+
     switch (nargsneeded) {
       case 0:
         fpvar(outfp, fmt);
@@ -1185,7 +1173,7 @@ static int interpx(int start, int *status)
       case tkgt:          // FALLTHROUGH intentional here
       case tkge:
         ; int cmp = 31416;
-        
+
         if (  (is_num(&STKP[-1]) &&
               (STKP[0].flags & (ZF_NUM | ZF_NUMSTR) || !STKP[0].flags)) ||
               (is_num(&STKP[0]) &&
@@ -1347,9 +1335,9 @@ static int interpx(int start, int *status)
         int outmode = *ip++;
         FILE *outfp = stdout;
         switch (outmode) {
-          case tkgt: outfp = setup_outfile("f", "w"); break;
-          case tkappend: outfp = setup_outfile("f", "a"); break;
-          case tkpipe: outfp = setup_outfile("p", "w"); break;
+          case tkgt: outfp = setup_file("f", "w"); break;
+          case tkappend: outfp = setup_file("f", "a"); break;
+          case tkpipe: outfp = setup_file("p", "w"); break;
           default: nargs++; break;
         }
         nargs--;
@@ -1701,7 +1689,8 @@ static int interpx(int start, int *status)
         // source is tkeof (no pipe/file), tklt (file), or tkpipe (pipe)
         // stream is name of file or pipe
         // v is NULL or an lvalue ref
-        push_int_val(awk_getline(source, fp, v));
+        if (fp != badfile) push_int_val(awk_getline(source, fp, v));
+        else push_int_val(-1);
 
         // fake return value for now
         break;
@@ -1986,10 +1975,10 @@ EXTERN void run(int optind, int argc, char **argv, char *sepstring, int num_assi
   init_globals(optind, argc, argv, sepstring, num_assignments, assignments, envp);
   init_field_rx();
   rx_compile_or_die(&TT.rx_printf_fmt, printf_fmt_rx);
-  setup_std_file("-", stdin, "r");
-  setup_std_file("/dev/stdin", stdin, "r");
-  setup_std_file("/dev/stdout", stdout, "w");
-  setup_std_file("/dev/stderr", stderr, "w");
+  new_file("-", stdin, 'r', 'f')->is_std_file = 1;
+  new_file("/dev/stdin", stdin, 'r', 'f')->is_std_file = 1;
+  new_file("/dev/stdout", stdout, 'w', 'f')->is_std_file = 1;
+  new_file("/dev/stderr", stderr, 'w', 'f')->is_std_file = 1;
   seed_jkiss32(123);
   int status = -1, r = 0;
   if (TT.cgl.first_begin) r = interp(TT.cgl.first_begin, &status);
