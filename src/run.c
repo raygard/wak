@@ -1380,6 +1380,7 @@ static int interpx(int start, int *status)
 #define PREV_PARMBASE   -2
 #define ARG_CNT         -1
 #define FUNCTION_NUM    0
+        // Actual args follow, starting at parmbase + 1
       case tkfunction:    // function definition
         op2 = *ip++;    // func table num
         struct functab_slot *pfdef = &FUNC_DEF[op2];
@@ -1841,7 +1842,7 @@ static int interp(int start, int *status)
     TT.stkptr = stkptrbefore;
   }
   if (TT.stkptr - stkptrbefore)
-    error_exit("!! TT.stack pointer offset: %d\n", TT.stkptr - stkptrbefore);
+    error_exit("!!AWK BUG stack pointer offset: %d\n", TT.stkptr - stkptrbefore);
   return r;
 }
 

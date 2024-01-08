@@ -108,7 +108,7 @@ struct compiler_globals {
   int last_begin;
   int first_end;
   int last_end;
-  int first_recrule;
+  int first_recrule;  // recrule means "record rule"
   int last_recrule;
   int break_dest;
   int continue_dest;
@@ -174,7 +174,7 @@ struct global_data {
   char *progname;
   struct compiler_globals cgl;
   int spec_var_limit;              // used in compile.c and run.c
-  int zcode_last;                  // used in common.c and compile.c
+  int zcode_last;                  // used in only in compile.c
   int stkptr;      // used in run.c and (once) in compile.c
 
   struct runtime_globals rgl;

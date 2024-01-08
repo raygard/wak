@@ -171,7 +171,7 @@ static void init_tables(void)
   zlist_append(&TT.func_def_table, &func_ent);
   init_locals_table();
   zlist_init(&TT.zcode, sizeof(int));
-  gencd(tkeof);                   // FIXME do I need this?
+  gencd(tkeof);   // to ensure zcode offsets are non-zero
   zlist_init(&TT.literals, sizeof(struct zvalue));
   zlist_init(&TT.stack, sizeof(struct zvalue));
   zlist_init(&TT.fields, sizeof(struct zvalue));
@@ -869,11 +869,13 @@ static void exprn(int rbp)
   lev--;
 }
 
+static char outmodes[] = {tkgt, tkappend, tkpipe, 0};
+
 static void print_stmt(int tk)
 {
   TT.cgl.in_print_stmt++;
   TT.cgl.pstate = -1;
-  int num_exprs = 0;
+  int num_exprs = 0, outmode;
   expect(tk); // tkprint or tkprintf
   if ((tk == tkprintf) || !strchr(printexprendsy, curtok())) {
     // printf always needs expression
@@ -887,12 +889,12 @@ static void print_stmt(int tk)
         expr();
     }
   }
-  int outmode = curtok();
-  if (istok(tkpipe) || istok(tkgt) || istok(tkappend)) {
+  outmode = curtok();
+  if (strchr(outmodes, outmode)) {
     scan();
     expr(); // FIXME s/b only bwk term?
     num_exprs++;
-  }
+  } else outmode = 0;
   gen2cd(tk, num_exprs);
   gencd(outmode);
   TT.cgl.in_print_stmt--;
