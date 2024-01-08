@@ -543,31 +543,30 @@ static struct zvalue *get_map_val(struct zvalue *v, struct zvalue *key)
   return &x->val;
 }
 
-static struct zvalue *setup_lvalue(int n, int parmbase, int *field_num)
+static struct zvalue *setup_lvalue(int ref_stack_ptr, int parmbase, int *field_num)
 {
   *field_num = -1;
-  struct zvalue *v = &STACK[n], *vv = v;
-  int k = v->num;
-  if (v->flags & ZF_FIELDREF) {
-    v = get_field_ref(*field_num = k);
-  } else if (v->flags & (ZF_REF | ZF_MAPREF)) {
-    if (k == NF) *field_num = THIS_MEANS_SET_NF;
-    if (k < 0) k = parmbase - k;    // loc of var on TT.stack
+  struct zvalue *ref, *v = 0; // init v to mute "may be uninit" warning
+  ref = &STACK[ref_stack_ptr];
+  if (ref->flags & ZF_FIELDREF) return get_field_ref(*field_num = ref->num);
+  int k = ref->num;
+  if (ref->flags & ZF_REF) {
+    if (k < 0) k = parmbase - k;
+    else if (k == NF) *field_num = THIS_MEANS_SET_NF;
+    return &STACK[k];
+  }
+  if (ref->flags & ZF_MAPREF) {
+    if (k < 0) k = parmbase - k;
     v = &STACK[k];
-    // Next line caused mem leaks and bad 'array in scalar context' errors
-    // force_maybemap_to_map(v);
-    // Next line caused ASAN errors; why?
-    // if (vv->flags & ZF_MAPREF) v->flags = ZF_MAP;
-    // Next line fixed the above errors.
-    if (vv->flags & ZF_MAPREF) force_maybemap_to_map(v);
-    if (is_map(v)) {
-      v = get_map_val(v, &STACK[n - 1]);
-      swap();
-      drop();
-    }
+    force_maybemap_to_map(v);
+    if (!(is_map(v))) fatal("scalar in array context");
+    v = get_map_val(v, &STACK[ref_stack_ptr - 1]);
+    swap();
+    drop();
   } else fatal("assignment to bad lvalue");
-  return v;
+  return v; // order fatal() and return to mute warning
 }
+
 
 static struct zfile *new_file(char *fn, FILE *fp, char mode, char f_or_p)
 {
@@ -1421,7 +1420,6 @@ static int interpx(int start, int *status)
           }
           push_val(&vv);
         }
-
         break;
 
       case tkreturn:

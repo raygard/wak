@@ -1426,5 +1426,6 @@ EXTERN void compile(void)
     gencd(opquit);
     TT.cgl.first_recrule = TT.zcode_last;
   }
+  gencd(opquit);  // One more opcode to keep ip in bounds in run code.
   diag_func_def_ref();
 }
