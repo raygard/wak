@@ -15,7 +15,7 @@ static void progfiles_init(char *progstring, struct arg_list *prog_args)
   TT.scs->p = progstring ? progstring : "  " + 2;
   TT.scs->progstring = progstring;
   TT.scs->prog_args = prog_args;
-  TT.scs->filename = "(None)";  // Not needed...
+  TT.scs->filename = "(cmdline)";
   TT.scs->line = 0;      // for getline()
   TT.scs->line_size = 0; // for getline()
   TT.scs->line_num = 0;  // Not needed...
@@ -45,8 +45,7 @@ static int awk(char *sepstring, char *progstring, struct arg_list *prog_args,
   compile();
 
   if (TT.cgl.compile_error_count)
-    fprintf(stderr, "Compile ended with %d error%s.\n", TT.cgl.compile_error_count,
-        TT.cgl.compile_error_count == 1 ? "" : "s");
+    error_exit("%d syntax error(s)", TT.cgl.compile_error_count);
   else {
     if (opt_run_prog)
       run(optind, argc, argv, sepstring, assign_args, envp);
@@ -121,15 +120,13 @@ int main(int argc, char **argv, char **envp)
         break;
         break;
       default:
-        fprintf(stderr, "%s", usage);
-        exit(EXIT_FAILURE);
+        error_exit("Option error.\n%s", usage);
     }
   }
 
   if (!prog_args) {
     if (optind >= argc) {
-      fprintf(stderr, "No program string.\n%s", usage);
-      exit(EXIT_FAILURE);
+      error_exit("No program string.\n%s", usage);
     }
     progstring = argv[optind++];
   }

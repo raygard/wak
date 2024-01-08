@@ -67,7 +67,7 @@ EXTERN int rx_compile(regex_t *rx, char *pat)
   if ((r = regcomp(rx, pat, REG_EXTENDED)) != 0) {
     char errbuf[256];
     regerror(r, rx, errbuf, sizeof(errbuf));
-    fprintf(stderr, "regex error %d: %s on '%s' -- ", r, errbuf, pat);
+    error_exit("regex error %d: %s on '%s' -- ", r, errbuf, pat);
   }
   return r;
 }
@@ -105,8 +105,7 @@ static int match(struct zvalue *zvsubject, struct zvalue *zvpat)
       char errbuf[256];
       regerror(r, &rx, errbuf, sizeof(errbuf));
       // FIXME TODO better diagnostic here
-      fprintf(stderr, "regex match error %d: %s\n", r, errbuf);
-      exit(123);  // FIXME TODO use fatal() or ... ?
+      error_exit("regex match error %d: %s\n", r, errbuf);
     }
     rx_zvalue_free(rxp, zvpat);
     return 1;
@@ -477,7 +476,7 @@ static struct zvalue *val_to_str_fmt(struct zvalue *v, char *fmt)
     zvalue_release_zstring(v);
     v->vst = num_to_zstring(v->num, fmt);
   } else {
-    fatal("!!! Wrong or unknown type in val_to_str_fmt\n");
+    fatal("Wrong or unknown type in val_to_str_fmt\n");
   }
   v->flags = ZF_STR;
   return v;
@@ -794,7 +793,7 @@ static int is_ok_varname(char *v)
 // FIXME TODO return value never used. What if assign to var not in globals?
 static int assign_global(char *var, char *value)
 {
-  if (!is_ok_varname(var)) ffatal("invalid variable name '%s'\n'", var);
+  if (!is_ok_varname(var)) ffatal("Invalid variable name '%s'\n", var);
   int globals_ent = find_global(var);
   if (globals_ent) {
     struct zvalue *v = &STACK[globals_ent];
@@ -1823,9 +1822,8 @@ static int interpx(int start, int *status)
           math_builtin(opcode, *ip++);  // 2nd arg is number of args in call
           break;
         }
-
-        fprintf(stderr, "!!! Unimplemented opcode %d\n", opcode);
-        exit(127);
+        // This should never happen:
+        error_exit("!!! Unimplemented opcode %d\n", opcode);
     }
   }
   return opquit;
@@ -1845,7 +1843,7 @@ static int interp(int start, int *status)
     TT.stkptr = stkptrbefore;
   }
   if (TT.stkptr - stkptrbefore)
-    fprintf(stderr, "!! TT.stack pointer offset: %d\n", TT.stkptr - stkptrbefore);
+    error_exit("!! TT.stack pointer offset: %d\n", TT.stkptr - stkptrbefore);
   return r;
 }
 

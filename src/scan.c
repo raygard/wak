@@ -163,8 +163,7 @@ static void get_string_or_regex(int endchar)
     if (TT.scs->ch == '\n') {
       // FIXME Handle unterminated string or regex. Is this OK?
       // FIXME TODO better diagnostic here?
-      fprintf(stderr, "unterminated string or regex\n");
-      TT.cgl.compile_error_count++;
+      xerr("%s\n", "unterminated string or regex");
       break;
     } else if (TT.scs->ch == '\\') {
       // \\ \a \b \f \n \r \t \v \" \/ \ddd
@@ -211,13 +210,11 @@ static void get_string_or_regex(int endchar)
           // pass \ unmolested if not awk escape,
           // so that regex routines can see it.
           if (!strchr(".[]()*+?{}|^$-", TT.scs->ch)) {
-            fprintf(stderr, "%s: %d: ", TT.scs->filename, TT.scs->line_num);
-            fprintf(stderr, "warning: '\\%c' -- unknown regex escape\n", TT.scs->ch);
+            xerr("warning: '\\%c' -- unknown regex escape\n", TT.scs->ch);
           }
           append_this_char('\\');
         } else {
-          fprintf(stderr, "%s: %d: ", TT.scs->filename, TT.scs->line_num);
-          fprintf(stderr, "warning: '\\%c' treated as plain '%c'\n", TT.scs->ch, TT.scs->ch);
+          xerr("warning: '\\%c' treated as plain '%c'\n", TT.scs->ch, TT.scs->ch);
         }
       }
     } else if (TT.scs->ch == EOF) {

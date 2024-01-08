@@ -327,10 +327,9 @@ struct zmap {
 };
 
 #define MAPSLOT    ((struct zmap_slot *)(m->slot).base)
-
-#define ffatal(format, ...) zzfatal(__FILE__, __LINE__, format, __VA_ARGS__)
-#define fatal(...) zzfatal(__FILE__, __LINE__, "%s\n", __VA_ARGS__)
-#define xerr(format, ...) zzerr(__FILE__, __LINE__, format, __VA_ARGS__)
+#define ffatal(format, ...) zzerr("$" format, __VA_ARGS__)
+#define fatal(...) zzerr("$%s\n", __VA_ARGS__)
+#define xerr(format, ...) zzerr(format, __VA_ARGS__)
 
 #define NO_EXIT_STATUS  (9999987)  // value unlikely to appear in exit stmt
 
@@ -341,6 +340,7 @@ ssize_t getdelim(char ** restrict lineptr, size_t * restrict n, int delimiter, F
 #ifndef FOR_TOYBOX
 
 // Common (global) data
+#define xexit() exit(42)
 EXTERN struct global_data TT;
 #endif  // FOR_TOYBOX
 
@@ -381,8 +381,7 @@ EXTERN struct compiler_globals cgl;
 
 EXTERN void zvalue_dup_zstring(struct zvalue *v);
 
-EXTERN void zzfatal(char *fn, int lnum, char *format, ...);
-EXTERN void zzerr(char *fn, int lnum, char *format, ...);
+EXTERN void zzerr(char *format, ...);
 
 EXTERN void error_exit(char *format, ...);
 EXTERN void xfree(void *p);

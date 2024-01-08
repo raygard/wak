@@ -28,29 +28,25 @@ EXTERN char *builtins = " atan2     cos       sin       exp       log       "
     "close     index     match     split     "
     "sub       gsub      sprintf   substr    ";
 
-EXTERN void zzerr(char *fn, int lnum, char *format, ...)
+EXTERN void zzerr(char *format, ...)
 {
   va_list args;
-  TT.cgl.compile_error_count++;
-  (void)fn; (void)lnum;
-  fprintf(stderr, "%s: file %s line %d: ", TT.progname, TT.scs->filename, TT.scs->line_num);
+  int fatal_sw = 0;
+  fprintf(stderr, "%s: ", TT.progname);
+  if (format[0] == '$') {
+    fprintf(stderr, "FATAL: ");
+    format++;
+    fatal_sw = 1;
+  }
+  fprintf(stderr, "file %s line %d: ", TT.scs->filename, TT.scs->line_num);
   va_start(args, format);
   vfprintf(stderr, format, args);
   va_end(args);
+  if (format[strlen(format)-1] != '\n') fputc('\n', stderr); // TEMP FIXME !!!
   fflush(stderr);
-}
-
-EXTERN void zzfatal(char *fn, int lnum, char *format, ...)
-{
-  va_list args;
-  (void)fn; (void)lnum;
-  fprintf(stderr, "%s: file %s line %d: ", TT.progname, TT.scs->filename, TT.scs->line_num);
-  va_start(args, format);
-  vfprintf(stderr, format, args);
-  va_end(args);
-  fprintf(stderr, "%s: exit on fatal error\n", TT.progname);
-  fflush(stderr);
-  exit(42);
+  if (fatal_sw) xexit();
+        // Don't bump error count for warnings
+  else if (!strstr(format, "arning")) TT.cgl.compile_error_count++;
 }
 
 EXTERN void get_token_text(char *op, int tk)

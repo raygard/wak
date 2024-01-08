@@ -233,51 +233,62 @@ static int getrbp(int tok)
   return (lbp <= 60 || lbp == 170) ? lbp - 1 : lbp;
 }
 
+static void unexpected_eof(void)
+{
+  error_exit("terminated with error(s)");
+}
+
 //// syntax error diagnostic and recovery (Turner's method)
-// TODO FIXME add ref for Turner's method?
+// D.A. Turner, Error diagnosis and recovery in one pass compilers,
+// Information Processing Letters, Volume 6, Issue 4, 1977, Pages 113-115
 static int recovering = 0;
 
-static void complain(int tk, int lno)
+static void complain(int tk)
 {
   if (recovering) {
     return;
   }
   recovering = 1;
+  //char *TT.tokstr = TT.scs->tokstr;
   if (strcmp(TT.tokstr, "\n") == 0) TT.tokstr = "<newline>";
+//fprintf(stderr, "complain recover %s %d\n", TT.tokstr, tk);
   if (tksemi <= tk && tk <= tkpipe) {
+    //extern char *ops;
     char op[3];
     get_token_text(op, tk);
-    xerr("(%d) syntax near '%s' -- '%s' expected\n", lno, TT.tokstr, op);
+    //memmove(op, ops + (3 * tk - 29), 2);
+    xerr("syntax near '%s' -- '%s' expected\n", TT.tokstr, op);
   } else if (tk >= tkin && tk <= tksubstr) {
     char tkstr[10];
     if (tk < tkatan2) memmove(tkstr, keywords + 1 + 10 * (tk - tkin), 10);
     else memmove(tkstr, builtins + 1 + 10 * (tk - tkatan2), 10);
     *strchr(tkstr, ' ') = 0;
-    xerr("(%d) syntax near '%s' -- '%s' expected\n", lno, TT.tokstr, tkstr);
+    xerr("syntax near '%s' -- '%s' expected\n", TT.tokstr, tkstr);
   } else {
     // FIXME FIXME make better
-    xerr("(%d) syntax near '%s' (%d)\n", lno, TT.tokstr, tk);
+    //fprintf(stderr, "expected %s\n", toknames[tk]);
+    xerr("syntax near '%s' (%d)\n", TT.tokstr, tk);
   }
 }
 
-static void check_tk_with_recovery(int tk, int lno)
+static void expect(int tk)
 {
   if (recovering) {
     while (!istok(tkeof) && !istok(tk))
       scan();
-    if (istok(tkeof)) error_exit("(%d:) unexpected EOF\n", __LINE__);
+    //if (istok(tkeof)) error_exit("(%d:) unexpected EOF\n", __LINE__);
+    if (istok(tkeof)) unexpected_eof();
     scan(); // consume expected token
     recovering = 0;
-  } else if (!havetok(tk)) complain(tk, lno);
+  } else if (!havetok(tk)) complain(tk);
 }
 
 static void skip_to(char *tklist)
 {
   do scan(); while (!istok(tkeof) && !strchr(tklist, curtok()));
-  if (istok(tkeof)) error_exit("(%d:) unexpected EOF\n", __LINE__);
+  if (istok(tkeof)) unexpected_eof();
 }
 
-#define expect(tk) check_tk_with_recovery(tk, __LINE__)
 //// END syntax error diagnostic and recovery (Turner's method)
 
 static void optional_nl_or_semi(void)
@@ -1275,7 +1286,7 @@ static void action(int action_type)
   // Should have lbrace on entry.
   expect(tklbrace);
   for (;;) {
-    if (istok(tkeof)) error_exit("(%d:) unexpected EOF\n", __LINE__);
+    if (istok(tkeof)) unexpected_eof();
     optional_nl_or_semi();
     if (havetok(tkrbrace)) {
       break;
@@ -1288,7 +1299,7 @@ static void action(int action_type)
     if (!is_nl_semi() && !istok(tkrbrace)) {
       xerr("syntax near '%s' -- newline, ';', or '}' expected\n", TT.tokstr);
       while (!is_nl_semi() && !istok(tkrbrace) && !istok(tkeof)) scan();
-      if (istok(tkeof)) error_exit("(%d:) unexpected EOF\n", __LINE__);
+      if (istok(tkeof)) unexpected_eof();
     }
     if (havetok(tkrbrace)) break;
     // Must be semicolon or newline
@@ -1381,9 +1392,10 @@ static void diag_func_def_ref(void)
 {
   int n = zlist_len(&TT.func_def_table);
   for (int k = 1; k < n; k++) {
-    if ((FUNC_DEF[k].flags & FUNC_CALLED) && !(FUNC_DEF[k].flags & FUNC_DEFINED)) {
-      fprintf(stderr, "function '%s' not defined\n", FUNC_DEF[k].name);
-      TT.cgl.compile_error_count++;
+    if ((FUNC_DEF[k].flags & FUNC_CALLED) &&
+            !(FUNC_DEF[k].flags & FUNC_DEFINED)) {
+      // Sorry, we can't tell where this was called from, for now at least.
+      xerr("Undefined function '%s'", FUNC_DEF[k].name);
     }
   }
 }
