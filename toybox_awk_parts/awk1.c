@@ -88,6 +88,7 @@ GLOBALS(
     int narg;           // cmdline arg index
     int nfiles;         // num of cmdline data file args processed
     int eof;            // all cmdline files (incl. stdin) read
+    char *recptr;
     char *recbuf;
     size_t recbufsize;
     char *recbuf_multx;
@@ -112,8 +113,11 @@ GLOBALS(
   int stkptr;
 
   char *pbuf;   // Used for number formatting in num_to_zstring()
+#define RS_MAX  64
+  char rs_last[RS_MAX];
+  regex_t rx_rs_default, rx_rs_last;
   regex_t rx_default, rx_last, rx_printf_fmt;
-#define FS_MAX  128
+#define FS_MAX  64
   char fs_last[FS_MAX];
   char one_char_fs[4];
   int nf_internal;  // should match NF
@@ -127,6 +131,13 @@ GLOBALS(
     char mode;  // w, a, or r
     char file_or_pipe;  // f or p
     char is_std_file;
-  } *zfiles;
+    char *recbuf;
+    size_t recbufsize;
+    char *recbuf_multi;
+    size_t recbufsize_multi;
+    char *recbuf_multx;
+    size_t recbufsize_multx;
+    int recoffs, endoffs;
+  } *zfiles, *cfile, *zstdout;
 )
 

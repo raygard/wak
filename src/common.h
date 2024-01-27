@@ -134,10 +134,7 @@ struct runtime_globals {
   int narg;           // cmdline arg index
   int nfiles;         // num of cmdline data file args processed
   int eof;            // all cmdline files (incl. stdin) read
-  char *recbuf;
-  size_t recbufsize;
-  char *recbuf_multx;
-  size_t recbufsize_multx;
+  char *recptr;
   struct zstring *zspr;      // Global to receive sprintf() string value
 };
 
@@ -154,6 +151,13 @@ struct zfile {
   char mode;  // w, a, or r
   char file_or_pipe;  // f or p
   char is_std_file;
+  char *recbuf;
+  size_t recbufsize;
+  char *recbuf_multi;
+  size_t recbufsize_multi;
+  char *recbuf_multx;
+  size_t recbufsize_multx;
+  int recoffs, endoffs;
 };
 
 // Global data
@@ -180,14 +184,18 @@ struct global_data {
 
   char *pbuf;   // Used for number formatting in num_to_zstring()
   regex_t rx_default, rx_last; // Default and last used FS regex
-#define FS_MAX  128
+#define FS_MAX  64
   char fs_last[FS_MAX];
   char one_char_fs[4];
   int nf_internal;  // should match NF
   char range_sw[64];   // FIXME TODO quick and dirty set of range switches
   int file_cnt, std_file_cnt;
-  struct zfile *zfiles;
+  struct zfile *zfiles, *cfile, *zstdout;
   regex_t rx_printf_fmt;
+
+#define RS_MAX  64
+  char rs_last[RS_MAX];
+  regex_t rx_rs_default, rx_rs_last;
 };
 #endif  // FOR_TOYBOX
 enum toktypes {

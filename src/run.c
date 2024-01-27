@@ -563,7 +563,7 @@ static struct zvalue *setup_lvalue(int ref_stack_ptr, int parmbase, int *field_n
 static struct zfile *new_file(char *fn, FILE *fp, char mode, char f_or_p)
 {
   struct zfile *f = xzalloc(sizeof(struct zfile));
-  *f = (struct zfile){TT.zfiles, xstrdup(fn), fp, mode, f_or_p, 0};
+  *f = (struct zfile){TT.zfiles, xstrdup(fn), fp, mode, f_or_p, 0, 0, 0, 0, 0, 0, 0, 0, 0};
   return TT.zfiles = f;
 }
 
@@ -597,6 +597,9 @@ static int close_file(void)
   struct zfile **pp = &TT.zfiles;
   for (struct zfile *p = TT.zfiles; p; pp = &p->next, p = p->next)
     if (!strcmp(STKP[0].vst->str, p->fn)) {
+      xfree(p->recbuf);
+      xfree(p->recbuf_multi);
+      xfree(p->recbuf_multx);
       if (!p->fp || (p->file_or_pipe == 'f' ? fclose : pclose)(p->fp) < 0)
         return -1;  // if not returning, assume close was OK
       if (!p->is_std_file) { // don't unlink stdout, stderr, etc.
@@ -609,12 +612,12 @@ static int close_file(void)
   return -1;    // file not found in table
 }
 
-static FILE *badfile = (void *)"";
+static struct zfile badfile_obj, *badfile = &badfile_obj;
 
 // FIXME TODO check if file/pipe/mode matches what's in the table already.
 // Apparently gawk/mawk/nawk are OK with different mode, but just use the file
 // in whatever mode it's already in; i.e. > after >> still appends.
-static FILE *setup_file(char *file_or_pipe, char *mode)
+static struct zfile *setup_file(char *file_or_pipe, char *mode)
 {
   val_to_str(STKP);   // filename at top of TT.stack
   char *fn = STKP[0].vst->str;
@@ -622,13 +625,13 @@ static FILE *setup_file(char *file_or_pipe, char *mode)
   for (struct zfile *p = TT.zfiles; p; p = p->next)
     if (!strcmp(fn, p->fn)) {
       drop();
-      return p->fp;   // open; return it
+      return p;   // open; return it
     }
   FILE *fp = (*file_or_pipe == 'f' ? fopen : popen)(fn, mode);
   if (fp) {
     struct zfile *p = new_file(fn, fp, *mode, *file_or_pipe);
     drop();
-    return p->fp;
+    return p;
   }
   if (*mode != 'r') ffatal("cannot open '%s'\n", fn);
   drop();
@@ -841,13 +844,13 @@ static char *nextfilearg(void)
 static int next_fp(void)
 {
   char *fn = nextfilearg();
-  if (TT.rgl.fp && TT.rgl.fp != stdin) fclose(TT.rgl.fp);
-  if ((!fn && !TT.rgl.nfiles && TT.rgl.fp != stdin) || (fn && !strcmp(fn, "-"))) {
-    TT.rgl.fp = stdin;
+  if (TT.cfile->fp && TT.cfile->fp != stdin) fclose(TT.cfile->fp);
+  if ((!fn && !TT.rgl.nfiles && TT.cfile->fp != stdin) || (fn && !strcmp(fn, "-"))) {
+    TT.cfile->fp = stdin;
     zvalue_release_zstring(&STACK[FILENAME]);
     STACK[FILENAME].vst = new_zstring("<stdin>", 7);
   } else if (fn) {
-    if (!(TT.rgl.fp = fopen(fn, "r"))) ffatal("can't open %s\n", fn);
+    if (!(TT.cfile->fp = fopen(fn, "r"))) ffatal("can't open %s\n", fn);
     zvalue_copy(&STACK[FILENAME], &TT.rgl.cur_arg);
     set_num(&STACK[FNR], 0);
   } else {
@@ -857,54 +860,99 @@ static int next_fp(void)
   return 1;
 }
 
-static ssize_t getrec_multiline(FILE *fp)
+static ssize_t getrec_multiline(struct zfile *zfp)
 {
   ssize_t k, kk;
   do {
-    k = getdelim(&TT.rgl.recbuf, &TT.rgl.recbufsize, '\n', fp);
-  } while (k > 0 && TT.rgl.recbuf[0] == '\n');
+    k = getdelim(&zfp->recbuf_multi, &zfp->recbufsize_multi, '\n', zfp->fp);
+  } while (k > 0 && zfp->recbuf_multi[0] == '\n');
+  TT.rgl.recptr = zfp->recbuf_multi;
   if (k < 0) return k;
-  // k > 0 and recbuf is not only a \n. Prob. ends w/ \n
+  // k > 0 and recbuf_multi is not only a \n. Prob. ends w/ \n
   // but may not at EOF (last line w/o newline)
   for (;;) {
-    kk = getdelim(&TT.rgl.recbuf_multx, &TT.rgl.recbufsize_multx, '\n', fp);
-    if (kk < 0 || TT.rgl.recbuf_multx[0] == '\n') break;
-    // data is in TT.rgl.recbuf[0..k-1]; append to it
-    if ((size_t)(k + kk + 1) > TT.rgl.recbufsize)
-      TT.rgl.recbuf = xrealloc(TT.rgl.recbuf, TT.rgl.recbufsize = k + kk + 1);
-    memmove(TT.rgl.recbuf + k, TT.rgl.recbuf_multx, kk+1);
+    kk = getdelim(&zfp->recbuf_multx, &zfp->recbufsize_multx, '\n', zfp->fp);
+    if (kk < 0 || zfp->recbuf_multx[0] == '\n') break;
+    // data is in zfp->recbuf_multi[0..k-1]; append to it
+    if ((size_t)(k + kk + 1) > zfp->recbufsize_multi)
+      zfp->recbuf_multi =
+          xrealloc(zfp->recbuf_multi, zfp->recbufsize_multi = k + kk + 1);
+    memmove(zfp->recbuf_multi + k, zfp->recbuf_multx, kk+1);
     k += kk;
   }
-  if (k > 1 && TT.rgl.recbuf[k-1] == '\n') TT.rgl.recbuf[--k] = '\0';
+  if (k > 1 && zfp->recbuf_multi[k-1] == '\n') zfp->recbuf_multi[--k] = 0;
+  TT.rgl.recptr = zfp->recbuf_multi;
   return k;
 }
 
-static ssize_t getrec_f(FILE *fp)
+static ssize_t getrec_f(struct zfile *zfp)
 {
-  int rs = ensure_str(&STACK[RS])->vst->str[0] & 0xff;
-  if (!rs) return getrec_multiline(fp);
-
-  ssize_t k = getdelim(&TT.rgl.recbuf, &TT.rgl.recbufsize, rs, fp);
-  if (k > 0 && TT.rgl.recbuf[k-1] == rs) TT.rgl.recbuf[--k] = 0;
-  return k;
+  int r = 0, rs = ensure_str(&STACK[RS])->vst->str[0] & 0xff;
+  if (!rs) return getrec_multiline(zfp);
+  regex_t rsrx, *rsrxp = &rsrx;
+  // TEMP!! FIXME Need to cache and avoid too-frequent rx compiles
+  rx_zvalue_compile(&rsrxp, &STACK[RS]);
+  regoff_t so = 0, eo = 0;
+  long ret = -1;
+  for ( ;; ) {
+    if (zfp->recoffs == zfp->endoffs) {
+#define INIT_RECBUF_LEN     8192
+#define RS_LENGTH_MARGIN    (INIT_RECBUF_LEN / 8)
+      if (!zfp->recbuf)
+        zfp->recbuf = xmalloc((zfp->recbufsize = INIT_RECBUF_LEN) + 1);
+      zfp->endoffs = fread(zfp->recbuf, 1, zfp->recbufsize, zfp->fp);
+      zfp->recoffs = 0;
+      zfp->recbuf[zfp->endoffs] = 0;
+      if (!zfp->endoffs) break;
+    }
+    TT.rgl.recptr = zfp->recbuf + zfp->recoffs;
+    r = rx_find(rsrxp, TT.rgl.recptr, &so, &eo, REG_NOTBOL | REG_NOTEOL);
+    // if not found, or found "near" end of buffer...
+    if (r || zfp->recoffs + eo > (int)zfp->recbufsize - RS_LENGTH_MARGIN) {
+      // if at end of data, and (not found or found at end of data)
+      if (zfp->endoffs < (int)zfp->recbufsize &&
+          (r || zfp->recoffs + eo == zfp->endoffs)) {
+        ret = zfp->endoffs - zfp->recoffs;
+        zfp->recoffs = zfp->endoffs;
+        break;
+      }
+      if (zfp->recoffs) {
+        memmove(zfp->recbuf, TT.rgl.recptr, zfp->endoffs - zfp->recoffs);
+        zfp->endoffs -= zfp->recoffs;
+        zfp->recoffs = 0;
+      } else zfp->recbuf =
+        xrealloc(zfp->recbuf, (zfp->recbufsize = zfp->recbufsize * 3 / 2) + 1);
+      zfp->endoffs += fread(zfp->recbuf + zfp->endoffs,
+                      1, zfp->recbufsize - zfp->endoffs, zfp->fp);
+      zfp->recbuf[zfp->endoffs] = 0;
+    } else {
+      // found and not too near end of data
+      ret = so;
+      TT.rgl.recptr[so] = 0;
+      zfp->recoffs += eo;
+      break;
+    }
+  }
+  regfree(rsrxp);
+  return ret;
 }
 
 static ssize_t getrec(void)
 {
   ssize_t k;
   if (TT.rgl.eof) return -1;
-  if (!TT.rgl.fp) next_fp();
+  if (!TT.cfile->fp) next_fp();
   do {
-    if ((k = getrec_f(TT.rgl.fp)) >= 0) return k;
+    if ((k = getrec_f(TT.cfile)) >= 0) return k;
   } while (next_fp());
   return -1;
 }
 
-static ssize_t getrec_f0_f(FILE *fp)
+static ssize_t getrec_f0_f(struct zfile *zfp)
 {
-  ssize_t k = getrec_f(fp);
+  ssize_t k = getrec_f(zfp);
   if (k >= 0) {
-    copy_to_field0(TT.rgl.recbuf, k);
+    copy_to_field0(TT.rgl.recptr, k);
   }
   return k;
 }
@@ -913,7 +961,7 @@ static ssize_t getrec_f0(void)
 {
   ssize_t k = getrec();
   if (k >= 0) {
-    copy_to_field0(TT.rgl.recbuf, k);
+    copy_to_field0(TT.rgl.recptr, k);
     incr_zvalue(&STACK[NR]);
     incr_zvalue(&STACK[FNR]);
   }
@@ -924,19 +972,19 @@ static ssize_t getrec_f0(void)
 // fp is file or pipe (is NULL if file/pipe could not be opened)
 // FIXME TODO should -1 return be replaced by test at caller?
 // v is NULL or an lvalue ref
-static int awk_getline(int source, FILE *fp, struct zvalue *v)
+static int awk_getline(int source, struct zfile *zfp, struct zvalue *v)
 {
   ssize_t k;
   int is_stream = source != tkeof;
-  if (is_stream && !fp) return -1;
+  if (is_stream && !zfp->fp) return -1;
   if (v) {
-    if ((k = is_stream ? getrec_f(fp) : getrec()) < 0) return 0;
-    set_string(v, new_zstring(TT.rgl.recbuf, k));
+    if ((k = is_stream ? getrec_f(zfp) : getrec()) < 0) return 0;
+    set_string(v, new_zstring(TT.rgl.recptr, k));
     if (!is_stream) {
       incr_zvalue(&STACK[NR]);
       incr_zvalue(&STACK[FNR]);
     }
-  } else k = is_stream ? getrec_f0_f(fp) : getrec_f0();
+  } else k = is_stream ? getrec_f0_f(zfp) : getrec_f0();
   return k < 0 ? 0 : 1;
 }
 
@@ -1323,7 +1371,7 @@ static int interpx(int start, int *status)
       case tkprintf:
         nargs = *ip++;
         int outmode = *ip++;
-        FILE *outfp = stdout;
+        struct zfile *outfp = TT.zstdout;
         switch (outmode) {
           case tkgt: outfp = setup_file("f", "w"); break;
           case tkappend: outfp = setup_file("f", "a"); break;
@@ -1332,30 +1380,30 @@ static int interpx(int start, int *status)
         }
         nargs--;
         if (opcode == tkprintf) {
-          varprint(fprintf, outfp, nargs);
+          varprint(fprintf, outfp->fp, nargs);
           drop_n(nargs);
           break;
         }
         if (!nargs) {
           val_to_str(&FIELD[0]);
-          fprintf(outfp, "%s", FIELD[0].vst->str);
+          fprintf(outfp->fp, "%s", FIELD[0].vst->str);
         } else {
           struct zvalue tempv = uninit_zvalue;
           zvalue_copy(&tempv, &STACK[OFS]);
           val_to_str(&tempv);
           for (int k = 0; k < nargs; k++) {
-            if (k) fprintf(outfp, "%s", tempv.vst->str);
+            if (k) fprintf(outfp->fp, "%s", tempv.vst->str);
             int sp = TT.stkptr - nargs + 1 + k;
             ////// FIXME refcnt -- prob. don't need to copy from TT.stack?
             v = &STACK[sp];
             val_to_str_fmt(v, val_to_str(&STACK[OFMT])->vst->str);
             struct zstring *zs = v->vst;
-            fprintf(outfp, "%s", zs ? zs->str : "");
+            fprintf(outfp->fp, "%s", zs ? zs->str : "");
           }
           zvalue_release_zstring(&tempv);
           drop_n(nargs);
         }
-        fputs(ensure_str(&STACK[ORS])->vst->str, outfp);
+        fputs(ensure_str(&STACK[ORS])->vst->str, outfp->fp);
         break;
 
       case opdrop:
@@ -1661,9 +1709,9 @@ static int interpx(int start, int *status)
         // if tkgetline 2 tkpipe:  var
         // Ensure pipe cmd on top
         if (nargs == 2 && source == tkpipe) swap();
-        FILE *fp = 0;
+        struct zfile *zfp = 0;
         if (source == tklt || source == tkpipe) {
-          fp = setup_file(source == tklt ? "f" : "p", "r");
+          zfp = setup_file(source == tklt ? "f" : "p", "r");
           nargs--;
         }
         // now cases are:
@@ -1679,7 +1727,7 @@ static int interpx(int start, int *status)
         // source is tkeof (no pipe/file), tklt (file), or tkpipe (pipe)
         // stream is name of file or pipe
         // v is NULL or an lvalue ref
-        if (fp != badfile) push_int_val(awk_getline(source, fp, v));
+        if (zfp != badfile) push_int_val(awk_getline(source, zfp, v));
         else push_int_val(-1);
 
         // fake return value for now
@@ -1964,12 +2012,14 @@ EXTERN void run(int optind, int argc, char **argv, char *sepstring,
 {
   char *printf_fmt_rx = "%[-+ #0]*([*]|[0-9]*)([.]([*]|[0-9]*))?[aAdiouxXfFeEgGcs%]";
   init_globals(optind, argc, argv, sepstring, assign_args, envp);
+  TT.cfile = xzalloc(sizeof(struct zfile));
   rx_compile_or_die(&TT.rx_default, "[ \t\n]+");
   rx_compile_or_die(&TT.rx_last, "[ \t\n]+");
   rx_compile_or_die(&TT.rx_printf_fmt, printf_fmt_rx);
   new_file("-", stdin, 'r', 'f')->is_std_file = 1;
   new_file("/dev/stdin", stdin, 'r', 'f')->is_std_file = 1;
   new_file("/dev/stdout", stdout, 'w', 'f')->is_std_file = 1;
+  TT.zstdout = TT.zfiles;
   new_file("/dev/stderr", stderr, 'w', 'f')->is_std_file = 1;
   seed_jkiss32(123);
   int status = -1, r = 0;
@@ -1981,7 +2031,5 @@ EXTERN void run(int optind, int argc, char **argv, char *sepstring,
   regfree(&TT.rx_default);
   regfree(&TT.rx_last);
   free_literal_regex();
-  xfree(TT.rgl.recbuf);
-  xfree(TT.rgl.recbuf_multx);
   if (status >= 0) exit(status);
 }
