@@ -85,7 +85,7 @@ int main(int argc, char **argv, char **envp)
       "-r do not run, just compile\n"
       "-p print source\n"
   };
-  char pbuf[pbufsize];
+  char pbuf[PBUFSIZE];
   TT.pbuf = pbuf;
   TT.progname = argv[0];
   char *sepstring = " ";

@@ -218,14 +218,14 @@ static size_t zlist_append_zvalue(struct zlist *p, struct zvalue *v)
 // pushed, invalidating the v pointer.
 EXTERN void push_val(struct zvalue *v)
 {
-  if (is_str(v)) zstring_incr_refcnt(v->vst);
+  if (IS_STR(v)) zstring_incr_refcnt(v->vst);
   TT.stkptr = zlist_append_zvalue(&TT.stack, v);
 }
 
 EXTERN void zvalue_copy(struct zvalue *to, struct zvalue *from)
 {
-  if (from->flags & ZF_ANYMAP) fatal("attempt to copy array var");
-  if (is_rx(from)) *to = *from;
+  if (from->flags & ZF_ANYMAP) FATAL("attempt to copy array var");
+  if (IS_RX(from)) *to = *from;
   else {
     zvalue_release_zstring(to);
     *to = *from;

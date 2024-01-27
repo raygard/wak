@@ -149,7 +149,7 @@ static void get_number(void)
     TT.scs->toktype = ERROR;
     TT.scs->tok = tkerr;
     TT.scs->error = 1;
-    ffatal("Unexpected token '%s'\n", TT.scs->tokstr);
+    FFATAL("Unexpected token '%s'\n", TT.scs->tokstr);
     return;
   }
   while (len--)
@@ -163,7 +163,7 @@ static void get_string_or_regex(int endchar)
     if (TT.scs->ch == '\n') {
       // FIXME Handle unterminated string or regex. Is this OK?
       // FIXME TODO better diagnostic here?
-      xerr("%s\n", "unterminated string or regex");
+      XERR("%s\n", "unterminated string or regex");
       break;
     } else if (TT.scs->ch == '\\') {
       // \\ \a \b \f \n \r \t \v \" \/ \ddd
@@ -210,15 +210,15 @@ static void get_string_or_regex(int endchar)
           // pass \ unmolested if not awk escape,
           // so that regex routines can see it.
           if (!strchr(".[]()*+?{}|^$-", TT.scs->ch)) {
-            xerr("warning: '\\%c' -- unknown regex escape\n", TT.scs->ch);
+            XERR("warning: '\\%c' -- unknown regex escape\n", TT.scs->ch);
           }
           append_this_char('\\');
         } else {
-          xerr("warning: '\\%c' treated as plain '%c'\n", TT.scs->ch, TT.scs->ch);
+          XERR("warning: '\\%c' treated as plain '%c'\n", TT.scs->ch, TT.scs->ch);
         }
       }
     } else if (TT.scs->ch == EOF) {
-      fatal("EOF in string or regex\n");
+      FATAL("EOF in string or regex\n");
     } else {
       append_char();
     }
@@ -244,7 +244,7 @@ static void ascan_opt_div(int div_op_allowed_here)
       TT.scs->toktype = ERROR;   // \ not last char in line.
       TT.scs->tok = tkerr;
       TT.scs->error = 3;
-      fatal("backslash not last char in line\n");
+      FATAL("backslash not last char in line\n");
       return;
     }
     break;
@@ -303,7 +303,7 @@ static void ascan_opt_div(int div_op_allowed_here)
     TT.scs->toktype = ERROR;
     TT.scs->tok = tkerr;
     TT.scs->error = 5;
-    fatal("null char\n");
+    FATAL("null char\n");
   } else {
     // All other tokens.
     TT.scs->toktype = TT.scs->ch;
@@ -335,7 +335,7 @@ static void ascan_opt_div(int div_op_allowed_here)
     TT.scs->toktype = ERROR;
     TT.scs->tok = tkerr;
     TT.scs->error = 4;
-    ffatal("Unexpected token '%s'\n", TT.scs->tokstr);
+    FFATAL("Unexpected token '%s'\n", TT.scs->tokstr);
   }
 }
 

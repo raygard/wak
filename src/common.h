@@ -3,9 +3,6 @@
 // License: 0BSD
 // vi: tabstop=2 softtabstop=2 shiftwidth=2
 
-////////////////////
-//// wak -- an awk implementation
-////////////////////
 #ifndef MONOLITHIC
 
 #endif // MONOLITHIC
@@ -67,7 +64,7 @@ struct arg_list {
 ////   declarations
 ////////////////////
 
-#define pbufsize  512 // For num_to_zstring()
+#define PBUFSIZE  512 // For num_to_zstring()
 
 #ifndef FOR_TOYBOX
 struct scanner_state {
@@ -282,11 +279,11 @@ struct zstring {
 // Macro to help facilitate possible future change in zvalue layout.
 #define ZVINIT(flags, num, ptr) {(flags), (double)(num), {(ptr)}}
 
-#define is_str(zvalp) ((zvalp)->flags & ZF_STR)
-#define is_rx(zvalp) ((zvalp)->flags & ZF_RX)
-#define is_num(zvalp) ((zvalp)->flags & ZF_NUM)
-#define is_map(zvalp) ((zvalp)->flags & ZF_MAP)
-#define is_empty_rx(zvalp) ((zvalp)->flags & ZF_EMPTY_RX)
+#define IS_STR(zvalp) ((zvalp)->flags & ZF_STR)
+#define IS_RX(zvalp) ((zvalp)->flags & ZF_RX)
+#define IS_NUM(zvalp) ((zvalp)->flags & ZF_NUM)
+#define IS_MAP(zvalp) ((zvalp)->flags & ZF_MAP)
+#define IS_EMPTY_RX(zvalp) ((zvalp)->flags & ZF_EMPTY_RX)
 
 #define GLOBAL      ((struct symtab_slot *)TT.globals_table.base)
 #define LOCAL       ((struct symtab_slot *)TT.locals_table.base)
@@ -332,9 +329,9 @@ struct zmap {
 };
 
 #define MAPSLOT    ((struct zmap_slot *)(m->slot).base)
-#define ffatal(format, ...) zzerr("$" format, __VA_ARGS__)
-#define fatal(...) zzerr("$%s\n", __VA_ARGS__)
-#define xerr(format, ...) zzerr(format, __VA_ARGS__)
+#define FFATAL(format, ...) zzerr("$" format, __VA_ARGS__)
+#define FATAL(...) zzerr("$%s\n", __VA_ARGS__)
+#define XERR(format, ...) zzerr(format, __VA_ARGS__)
 
 #define NO_EXIT_STATUS  (9999987)  // value unlikely to appear in exit stmt
 
