@@ -245,12 +245,10 @@ static int recovering = 0;
 
 static void complain(int tk)
 {
-  if (recovering) {
-    return;
-  }
+  if (recovering) return;
   recovering = 1;
   //char *TT.tokstr = TT.scs->tokstr;
-  if (strcmp(TT.tokstr, "\n") == 0) TT.tokstr = "<newline>";
+  if (!strcmp(TT.tokstr, "\n")) TT.tokstr = "<newline>";
 //fprintf(stderr, "complain recover %s %d\n", TT.tokstr, tk);
   if (tksemi <= tk && tk <= tkpipe) {
     //extern char *ops;
@@ -267,7 +265,8 @@ static void complain(int tk)
   } else {
     // FIXME FIXME make better
     //fprintf(stderr, "expected %s\n", toknames[tk]);
-    xerr("syntax near '%s' (%d)\n", TT.tokstr, tk);
+    //xerr("syntax near '%s' (%d)\n", TT.tokstr, tk);
+    xerr("syntax near '%s'\n", TT.tokstr);
   }
 }
 
@@ -634,6 +633,8 @@ static int primary(void)
   //  primary() must consume prefix and postfix operators as well as
   //      num, string, regex, var, var with subscripts, and function calls
 
+  int num_exprs = 0;
+  int nargs, modifier;
   int tok = curtok();
   switch (tok) {
     case tkvar:
@@ -668,7 +669,7 @@ static int primary(void)
       break;
 
     case tkbuiltin: // various builtins
-    case tkfunc: // User-defined function
+    case tkfunc:    // user-defined function
       function_call();
       break;
 
@@ -679,8 +680,8 @@ static int primary(void)
       scan();
       exprn(getlbp(tknot));   // unary +/- same precedence as !
       if (tok == tknot) gencd(tknot);
-      else gencd(opnegate);
-      if (tok == tkplus) gencd(opnegate);
+      else gencd(opnegate);               // forces to number
+      if (tok == tkplus) gencd(opnegate); // forces to number
       break;
 
       // Unary prefix ++ -- MUST take lvalue
@@ -695,7 +696,7 @@ static int primary(void)
     case tklparen:
       scan();
       TT.cgl.paren_level++;
-      int num_exprs = 0;
+      num_exprs = 0;
       do {
         expr();
         num_exprs++;
@@ -709,11 +710,11 @@ static int primary(void)
       // getline may be (according to awk book):
       // getline [var [<file]]
       // getline <file
-      // cmd | getline [var] TODO
+      // cmd | getline [var]
       // var must be lvalue (can be any lvalue?)
       scan();
-      // FIXME!! TODO
-      int nargs = 0, modifier = tkeof;
+      nargs = 0;
+      modifier = tkeof;
       if (istok(tkfield) || istok(tkvar)) {
         lvalue();
         nargs++;
@@ -737,10 +738,10 @@ static int primary(void)
 
 static void binary_op(int optor)  // Also for ternary ?: optor.
 {
+  int nargs, cdx = 0;  // index in TT.zcode list
   int rbp = getrbp(optor);
   if (optor != tkcat) scan();
   // curtok() holds first token of right operand.
-  int cdx = 0;  // index in TT.zcode list
   switch (optor) {
     case tkin:
       // right side of 'in' must be (only) an array name
@@ -757,7 +758,7 @@ static void binary_op(int optor)  // Also for ternary ?: optor.
 
   case tkpipe:
       expect(tkgetline);
-      int nargs = 1;
+      nargs = 1;
       if (istok(tkfield) || istok(tkvar)) {
         lvalue();
         nargs++;
@@ -892,7 +893,7 @@ static void print_stmt(int tk)
   outmode = curtok();
   if (strchr(outmodes, outmode)) {
     scan();
-    expr(); // FIXME s/b only bwk term?
+    expr(); // FIXME s/b only bwk term? check POSIX
     num_exprs++;
   } else outmode = 0;
   gen2cd(tk, num_exprs);
@@ -1179,7 +1180,7 @@ static void stmt(void)
         expr();
       } else gen2cd(tknumber, make_literal_num_val(0.0));
       gen2cd(tkreturn, TT.cgl.nparms);
-      if (!TT.cgl.in_function_body) xerr("%s", "return not in function\n");
+      if (!TT.cgl.in_function_body) xerr("%s", "return outside function def\n");
       break;
 
     case tklbrace:

@@ -137,8 +137,8 @@ struct runtime_globals {
   int eof;            // all cmdline files (incl. stdin) read
   char *recbuf;
   size_t recbufsize;
-  char *recbuf_multiline;
-  size_t recbufsize_multiline;
+  char *recbuf_multx;
+  size_t recbufsize_multx;
   struct zstring *zspr;      // Global to receive sprintf() string value
 };
 
@@ -180,9 +180,7 @@ struct global_data {
   struct runtime_globals rgl;
 
   char *pbuf;   // Used for number formatting in num_to_zstring()
-  regex_t rx_default;
-  regex_t rx_last;
-  regex_t rx_multiline;
+  regex_t rx_default, rx_last; // Default and last used FS regex
 #define FS_MAX  128
   char fs_last[FS_MAX];
   char one_char_fs[4];

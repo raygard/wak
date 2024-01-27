@@ -5,6 +5,10 @@
 
 #include "common.h"
 
+////////////////////
+//// runtime
+////////////////////
+
 static void check_numeric_string(struct zvalue *v)
 {
   if (v->vst) {
@@ -150,22 +154,6 @@ static int rx_find_FS(regex_t *rx, char *s, regoff_t *start, regoff_t *end, int 
 #define FIELDS_MAX  102400 // Was 1024; need more for toybox awk test
 #define THIS_MEANS_SET_NF 999999999
 
-// Called by run:run()
-static void init_field_rx(void)
-{
-  rx_compile_or_die(&TT.rx_default, "[ \t\n]+");
-  rx_compile_or_die(&TT.rx_last, "[ \t\n]+"); // FIXME TODO what if empty ""
-  rx_compile_or_die(&TT.rx_multiline, "[ \t]+");
-}
-
-// Called by run:run()
-static void free_field_rx(void)
-{
-  regfree(&TT.rx_default);
-  regfree(&TT.rx_last);
-  regfree(&TT.rx_multiline);
-}
-
 static int get_int_val(struct zvalue *v)
 {
   if (is_num(v)) return (int)v->num;
@@ -173,6 +161,10 @@ static int get_int_val(struct zvalue *v)
   return 0;
 }
 
+// A single-char FS is never a regex, so make it a [<char>] regex to
+// match only that one char in case FS is a regex metachar.
+// If regex FS is needed, must use > 1 char. If a '.' regex
+// is needed, use e.g. '.|.' (unlikely case).
 static char *fmt_one_char_fs(char *fs)
 {
   if (strlen(fs) != 1) return fs;
@@ -180,7 +172,7 @@ static char *fmt_one_char_fs(char *fs)
   return TT.one_char_fs;
 }
 
-static regex_t *rx_prep(char *fs)
+static regex_t *rx_fs_prep(char *fs)
 {
   if (!strcmp(fs, " ")) return &TT.rx_default;
   if (!strcmp(fs, TT.fs_last)) return &TT.rx_last;
@@ -245,7 +237,7 @@ static int splitter(void (*setter)(struct zmap *, int, char *, size_t), struct z
     return nf;
   }
   if (is_rx(zvfs)) rx = zvfs->rx;
-  else rx = rx_prep(fs);
+  else rx = rx_fs_prep(fs);
   while (*s) {
     // Find the next occurrence of FS.
     // rx_find_FS() returns 0 if found. If nonzero, the field will
@@ -305,7 +297,7 @@ static void rebuild_field0(void)
 // increase the value of NF; create any intervening TT.fields with the
 // uninitialized value; and cause the value of $0 to be recomputed, with the
 // TT.fields being separated by the value of OFS.]
-// Called by run:setup_lvalue()
+// Called by setup_lvalue()
 static struct zvalue *get_field_ref(int fnum)
 {
   if (fnum < 0 || fnum > FIELDS_MAX) error_exit("bad field num %d\n", fnum);
@@ -321,13 +313,13 @@ static struct zvalue *get_field_ref(int fnum)
   return &FIELD[fnum];
 }
 
-// Called by tksplit op in run
+// Called by tksplit op
 static int split(struct zstring *s, struct zvalue *a, struct zvalue *fs)
 {
   return splitter(set_map_element, a->map, s->str, fs);
 }
 
-// Called by run:getrec_f0_f() and run:getrec_f0()
+// Called by getrec_f0_f() and getrec_f0()
 static void copy_to_field0(char *buf, size_t k)
 {
   set_zvalue_str(&FIELD[0], buf, k);
@@ -337,7 +329,7 @@ static void copy_to_field0(char *buf, size_t k)
 
 // After changing $0, must rebuild TT.fields & reset NF
 // Changing other field must rebuild $0
-// Called in run by gsub() and assignment ops.
+// Called by gsub() and assignment ops.
 static void fixup_fields(int fnum)
 {
   if (fnum == THIS_MEANS_SET_NF) {  // NF was assigned to
@@ -362,7 +354,7 @@ static void fixup_fields(int fnum)
 }
 
 // Fetching non-existent field gets uninit string value; no change to NF!
-// Called by tkfield op in run    // TODO inline it in run?
+// Called by tkfield op       // TODO inline it?
 static void push_field(int fnum)
 {
   if (fnum < 0 || fnum > FIELDS_MAX) error_exit("bad field num %d\n", fnum);
@@ -372,7 +364,7 @@ static void push_field(int fnum)
 }
 
 ////////////////////
-////   run
+////   END fields
 ////////////////////
 
 #define STKP    (&STACK[TT.stkptr])   // pointer to top of stack
@@ -816,7 +808,7 @@ static int assignment_arg(char *arg)
 {
   char *val = strchr(arg, '=');
   if (val) {
-    *val++ = '\0';
+    *val++ = 0;
     if (!is_ok_varname(arg)) {
       *--val = '=';
       return 0;
@@ -875,12 +867,12 @@ static ssize_t getrec_multiline(FILE *fp)
   // k > 0 and recbuf is not only a \n. Prob. ends w/ \n
   // but may not at EOF (last line w/o newline)
   for (;;) {
-    kk = getdelim(&TT.rgl.recbuf_multiline, &TT.rgl.recbufsize_multiline, '\n', fp);
-    if (kk < 0 || TT.rgl.recbuf_multiline[0] == '\n') break;
+    kk = getdelim(&TT.rgl.recbuf_multx, &TT.rgl.recbufsize_multx, '\n', fp);
+    if (kk < 0 || TT.rgl.recbuf_multx[0] == '\n') break;
     // data is in TT.rgl.recbuf[0..k-1]; append to it
     if ((size_t)(k + kk + 1) > TT.rgl.recbufsize)
       TT.rgl.recbuf = xrealloc(TT.rgl.recbuf, TT.rgl.recbufsize = k + kk + 1);
-    memmove(TT.rgl.recbuf + k, TT.rgl.recbuf_multiline, kk+1);
+    memmove(TT.rgl.recbuf + k, TT.rgl.recbuf_multx, kk+1);
     k += kk;
   }
   if (k > 1 && TT.rgl.recbuf[k-1] == '\n') TT.rgl.recbuf[--k] = '\0';
@@ -1035,7 +1027,7 @@ static void gsub(int opcode, int nargs, int parmbase)
     // copy remaining subject string
     memmove(e, ep0, s + slen(v) - ep0);
     e += s + slen(v) - ep0;
-    *e = '\0';
+    *e = 0;
     z->size = e - z->str;
     zstring_release(&v->vst);
     v->vst = z;
@@ -1871,7 +1863,7 @@ static void init_globals(int optind, int argc, char **argv, char *sepstring,
   for (char **pkey = envp; *pkey; pkey++) {
     char *pval = strchr(*pkey, '=');
     if (!pval) continue;
-    *pval++ = '\0';
+    *pval++ = 0;
     struct zvalue zkey = ZVINIT(ZF_STR, 0, new_zstring(*pkey, strlen(*pkey)));
     struct zvalue *v = get_map_val(&m, &zkey);
     zstring_release(&zkey.vst);
@@ -1944,7 +1936,7 @@ static void init_globals(int optind, int argc, char **argv, char *sepstring,
     char *asgn = p->arg;
     char *val = strchr(asgn, '=');
     if (!val) error_exit("bad -v assignment format\n");
-    *val++ = '\0';
+    *val++ = 0;
     assign_global(asgn, val);
   }
 
@@ -1972,7 +1964,8 @@ EXTERN void run(int optind, int argc, char **argv, char *sepstring,
 {
   char *printf_fmt_rx = "%[-+ #0]*([*]|[0-9]*)([.]([*]|[0-9]*))?[aAdiouxXfFeEgGcs%]";
   init_globals(optind, argc, argv, sepstring, assign_args, envp);
-  init_field_rx();
+  rx_compile_or_die(&TT.rx_default, "[ \t\n]+");
+  rx_compile_or_die(&TT.rx_last, "[ \t\n]+");
   rx_compile_or_die(&TT.rx_printf_fmt, printf_fmt_rx);
   new_file("-", stdin, 'r', 'f')->is_std_file = 1;
   new_file("/dev/stdin", stdin, 'r', 'f')->is_std_file = 1;
@@ -1985,9 +1978,10 @@ EXTERN void run(int optind, int argc, char **argv, char *sepstring,
     if (TT.cgl.first_recrule) run_files(&status);
   if (TT.cgl.first_end) r = interp(TT.cgl.first_end, &status);
   regfree(&TT.rx_printf_fmt);
-  free_field_rx();
+  regfree(&TT.rx_default);
+  regfree(&TT.rx_last);
   free_literal_regex();
   xfree(TT.rgl.recbuf);
-  xfree(TT.rgl.recbuf_multiline);
+  xfree(TT.rgl.recbuf_multx);
   if (status >= 0) exit(status);
 }
