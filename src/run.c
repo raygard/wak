@@ -589,27 +589,26 @@ static int fflush_file(int nargs)
       if (!fflush(p->fp)) return 0;
   return -1;    // error, or file not found in table
 }
-
-static int close_file(void)
+static int close_file(char *fn)
 {
-  val_to_str(STKP);   // filename at top of TT.stack
-  // is it open in file table?
-  struct zfile **pp = &TT.zfiles;
-  for (struct zfile *p = TT.zfiles; p; pp = &p->next, p = p->next)
-    if (!strcmp(STKP[0].vst->str, p->fn)) {
+  // !fn (null ptr) means close all (exc. stdin/stdout/stderr)
+  int r = 0;
+  struct zfile *np, **pp = &TT.zfiles;
+  for (struct zfile *p = TT.zfiles; p; p = np) {
+    np = p->next;   // save in case unlinking file (invalidates p->next)
+    // Don't close std files -- wrecks print/printf (can be fixed though TODO)
+    if ((!p->is_std_file) && (!fn || !strcmp(fn, p->fn))) {
       xfree(p->recbuf);
       xfree(p->recbuf_multi);
       xfree(p->recbuf_multx);
-      if (!p->fp || (p->file_or_pipe == 'f' ? fclose : pclose)(p->fp) < 0)
-        return -1;  // if not returning, assume close was OK
-      if (!p->is_std_file) { // don't unlink stdout, stderr, etc.
-        *pp = p->next;  // unlink non "std" file from list
-        xfree(p->fn);
-        xfree(p);
-      }
-      return 0;
-    }
-  return -1;    // file not found in table
+      xfree(p->fn);
+      r = (p->fp) ? (p->file_or_pipe == 'f' ? fclose : pclose)(p->fp) : -1;
+      *pp = p->next;
+      xfree(p);
+      if (fn) return r;
+    } else pp = &p->next; // only if not unlinking zfile
+  }
+  return -1;  // file not in table, or closed all files
 }
 
 static struct zfile badfile_obj, *badfile = &badfile_obj;
@@ -1841,7 +1840,8 @@ static int interpx(int start, int *status)
 
       case tkclose:
         nargs = *ip++;
-        r = close_file();
+        val_to_str(STKP);   // filename at top of TT.stack
+        r = close_file(STKP->vst->str);
         drop();
         push_int_val(r);
         break;
@@ -2031,5 +2031,6 @@ EXTERN void run(int optind, int argc, char **argv, char *sepstring,
   regfree(&TT.rx_default);
   regfree(&TT.rx_last);
   free_literal_regex();
+  close_file(0);    // close all files
   if (status >= 0) exit(status);
 }
