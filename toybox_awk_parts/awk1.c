@@ -51,9 +51,8 @@ GLOBALS(
 
   struct compiler_globals {
     int in_print_stmt;
-    int in_function_body;
-    int pstate;
     int paren_level;
+    int in_function_body;
     int funcnum;
     int nparms;
     int compile_error_count;

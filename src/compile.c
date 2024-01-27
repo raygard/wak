@@ -16,7 +16,7 @@
 //    case tkmatchop, tknotmatch -- fix ~ (/re/)
 
 // Forward declarations -- for mutually recursive parsing functions
-static void exprn(int rbp);
+static int exprn(int rbp);
 static void lvalue(void);
 static int primary(void);
 static void stmt(void);
@@ -216,6 +216,7 @@ static int lbp_table[] = {  // Must align with enum Toks
 static int getlbp(int tok)
 {
   // FIXME: should tkappend be here too? is tkpipe needed?
+  // In print statement outside parens: make '>' end an expression
   if (TT.cgl.in_print_stmt && ! TT.cgl.paren_level && (tok == tkgt || tok == tkpipe))
     return 0;
   return (0 <= tok && tok <= tkin) ? lbp_table[tok] :
@@ -812,30 +813,30 @@ static int cat_start_concated_expr(int tok)
   return !! strchr(exprstarttermsy, tok) || tok >= tkgetline;
 }
 
-// TODO maybe move asgnops table into exprn()
-static char asgnops[] = {tkpowasgn, tkmodasgn, tkmulasgn, tkdivasgn, tkaddasgn,
-  tksubasgn, tkasgn, 0};
+#define CALLED_BY_PRINT 99987 // Arbitrary, different from any real rbp value
 
-static void exprn(int rbp)
+static int exprn(int rbp)
 {
   // On entry: TT.scs has first symbol of expression, e.g. var, number, string,
   // regex, func, getline, left paren, prefix op ($ ++ -- ! unary + or -) etc.
-  static int lev;
-  lev++;
-  int opnd_st = primary();
-  if (lev == 1 && TT.cgl.pstate < 0
-          && opnd_st > 0 && strchr(printexprendsy, curtok())) {
-      TT.cgl.pstate = opnd_st;
-      lev--;
-      return;
+  static char asgnops[] = {tkpowasgn, tkmodasgn, tkmulasgn, tkdivasgn,
+    tkaddasgn, tksubasgn, tkasgn, 0};
+  int prim_st = primary();
+  // If called directly by print_stmt(), and found a parenthesized expression list
+  //    followed by an end of print statement: any of > >> | ; } <newline>
+  //    Then: return the count of expressions in list
+  //    Else: continue parsing an expression
+  if (rbp == CALLED_BY_PRINT) {
+    if (prim_st > 0 && strchr(printexprendsy, curtok())) return prim_st;
+    else rbp = 0;
   }
 
   // mult_expr_list in parens must be followed by 'in' unless it
   // immediately follows print or printf, where it may still be followed
   // by 'in' ... unless at end of statement
-  if (opnd_st > 0 && ! istok(tkin))
+  if (prim_st > 0 && ! istok(tkin))
     xerr("syntax near '%s'; expected 'in'\n", TT.tokstr);
-  if (opnd_st > 0) gen2cd(tkrbracket, opnd_st);
+  if (prim_st > 0) gen2cd(tkrbracket, prim_st);
   // primary() has eaten subscripts, function args, postfix ops.
   // curtok() should be a binary op.
   int optor = curtok();
@@ -849,13 +850,12 @@ static void exprn(int rbp)
     // This happens for ?: || && ~ !~ < <= ~= == > >=
     //
     static char odd_assignment_rbp[] = {59, 60, 70, 80, 100, 110, 0};
-    if (opnd_st < 0 && (rbp <= getrbp(optor) || strchr(odd_assignment_rbp, rbp))) {
+    if (prim_st < 0 && (rbp <= getrbp(optor) || strchr(odd_assignment_rbp, rbp))) {
       convert_push_to_reference();
       scan();
       exprn(getrbp(optor));
       gencd(optor);
-      lev--;
-      return;
+      return 0;
     }
     xerr("syntax near '%s'\n", TT.tokstr[0] == '\n' ? "\\n" : TT.tokstr);
     skip_to(stmtendsy);
@@ -867,25 +867,21 @@ static void exprn(int rbp)
     optor = curtok();
     if (cat_start_concated_expr(optor)) optor = tkcat;
   }
-  lev--;
+  return 0;
 }
-
-static char outmodes[] = {tkgt, tkappend, tkpipe, 0};
 
 static void print_stmt(int tk)
 {
-  TT.cgl.in_print_stmt++;
-  TT.cgl.pstate = -1;
+  static char outmodes[] = {tkgt, tkappend, tkpipe, 0};
   int num_exprs = 0, outmode;
+  TT.cgl.in_print_stmt = 1;
   expect(tk); // tkprint or tkprintf
   if ((tk == tkprintf) || !strchr(printexprendsy, curtok())) {
     // printf always needs expression
     // print non-empty statement needs expression
-    expr();
-    if (TT.cgl.pstate > 0) {
-      num_exprs = TT.cgl.pstate;
-    } else {
-      TT.cgl.pstate = 0;
+    num_exprs = exprn(CALLED_BY_PRINT);
+    if (num_exprs > 0 && !strchr(printexprendsy, curtok())) fatal("print stmt bug");
+    if (!num_exprs) {
       for (num_exprs++; have_comma(); num_exprs++)
         expr();
     }
@@ -898,7 +894,7 @@ static void print_stmt(int tk)
   } else outmode = 0;
   gen2cd(tk, num_exprs);
   gencd(outmode);
-  TT.cgl.in_print_stmt--;
+  TT.cgl.in_print_stmt = 0;
 }
 
 static void delete_stmt(void)
