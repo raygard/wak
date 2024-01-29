@@ -187,7 +187,7 @@ static regex_t *rx_fs_prep(char *fs)
 static void set_map_element(struct zmap *m, int k, char *val, size_t len)
 {
   // Do not need format here b/c k is integer, uses "%lld" format.
-  struct zstring *key = num_to_zstring(k, 0);
+  struct zstring *key = num_to_zstring(k, "");// "" vs 0 format avoids warning
   struct zmap_slot *zs = zmap_find_or_insert_key(m, key);
   zstring_release(&key);
   zs->val.vst = zstring_update(zs->val.vst, 0, val, len);
@@ -395,11 +395,6 @@ static unsigned seed_jkiss32(unsigned n)
 }
 // END Random number generator
 
-static void check_not_map(struct zvalue *v)
-{
-  if (IS_MAP(v)) FATAL("array in scalar context");
-}
-
 static int popnumval(void)
 {
   TT.stack.avail -= sizeof(struct zvalue);
@@ -427,11 +422,10 @@ static void swap(void)
 
 static void force_maybemap_to_scalar(struct zvalue *v)
 {
-  if (v->flags & ZF_MAYBEMAP) {
-    v->flags = 0;
-    if (v->map->count) FATAL("attempt to use array as scalar.");
-    v->map = 0;   //// !!!! FIXME abandoning the maybe map
-  }
+  if (!(v->flags & ZF_ANYMAP)) return;
+  if (v->flags & ZF_MAP || v->map->count)
+    FATAL("array in scalar context");
+  v->flags = 0; v->map = 0; // v->flags = v->map = 0 gets warning
 }
 
 static void force_maybemap_to_map(struct zvalue *v)
@@ -443,7 +437,6 @@ static void force_maybemap_to_map(struct zvalue *v)
 static int get_set_logical(void)
 {
   struct zvalue *v = STKP;
-  check_not_map(v);
   force_maybemap_to_scalar(v);
   int r = 0;
   if (IS_NUM(v)) r = !! v->num;
@@ -456,7 +449,6 @@ static int get_set_logical(void)
 
 static struct zvalue *val_to_str_fmt(struct zvalue *v, char *fmt)
 {
-  check_not_map(v);
   force_maybemap_to_scalar(v);
   // TODO: consider handling numstring differently
   // if string and ONLY string (not numstring)
@@ -491,7 +483,6 @@ EXTERN struct zvalue *val_to_str(struct zvalue *v)
 
 static double val_to_num(struct zvalue *v)
 {
-  check_not_map(v);
   force_maybemap_to_scalar(v);
   if (v->flags & ZF_NUMSTR) zvalue_release_zstring(v);
   else if (!(IS_NUM(v))) {
@@ -537,21 +528,27 @@ static struct zvalue *get_map_val(struct zvalue *v, struct zvalue *key)
 
 static struct zvalue *setup_lvalue(int ref_stack_ptr, int parmbase, int *field_num)
 {
-  *field_num = -1;
+  // for +=, *=, etc
+  // Stack is: ... scalar_ref value_to_op_by
+  // or ... subscript_val map_ref value_to_op_by
+  // or ... fieldref value_to_op_by
+  // for =, ++, --
+  // Stack is: ... scalar_ref
+  // or ... subscript_val map_ref
+  // or ... fieldnum fieldref
+  int k;
   struct zvalue *ref, *v = 0; // init v to mute "may be uninit" warning
+  *field_num = -1;
   ref = &STACK[ref_stack_ptr];
   if (ref->flags & ZF_FIELDREF) return get_field_ref(*field_num = ref->num);
-  int k = ref->num;
+  k = ref->num >= 0 ? ref->num : parmbase - ref->num;
+  if (k == NF) *field_num = THIS_MEANS_SET_NF;
+  v = &STACK[k];
   if (ref->flags & ZF_REF) {
-    if (k < 0) k = parmbase - k;
-    else if (k == NF) *field_num = THIS_MEANS_SET_NF;
-    return &STACK[k];
-  }
-  if (ref->flags & ZF_MAPREF) {
-    if (k < 0) k = parmbase - k;
-    v = &STACK[k];
+    force_maybemap_to_scalar(v);
+  } else if (ref->flags & ZF_MAPREF) {
     force_maybemap_to_map(v);
-    if (!(IS_MAP(v))) FATAL("scalar in array context");
+    if (!IS_MAP(v)) FATAL("scalar in array context");
     v = get_map_val(v, &STACK[ref_stack_ptr - 1]);
     swap();
     drop();
@@ -1325,6 +1322,8 @@ static int interpx(int start, int *status)
         // or ... subscript_val map_ref value_to_assign
         // or ... fieldref value_to_assign
         v = setup_lvalue(TT.stkptr-1, parmbase, &field_num);
+        force_maybemap_to_scalar(STKP);
+        force_maybemap_to_scalar(v);
         zvalue_copy(v, STKP);
         swap();
         drop();
@@ -1444,9 +1443,6 @@ static int interpx(int start, int *status)
           // map to the var. When/if the var is used as a map or scalar in the
           // called function it will be converted to a map or scalar as
           // required.
-          // For now, if it is converted to a scalar, we just abandon the map.
-          // This is sloppy but this situation should be rare and the maybe-map
-          // should (!) be empty.
           // See force_maybemap_to_scalar().
           struct symtab_slot *q = &((struct symtab_slot *)loctab->base)[nargs+1];
           vv = (struct zvalue)ZVINIT(q->flags, 0, 0);
@@ -1465,7 +1461,8 @@ static int interpx(int start, int *status)
       case tkreturn:
         nparms = *ip++;
         nargs = STACK[parmbase+ARG_CNT].num;
-        //     should be copied! STACK[parmbase+RETURN_VALUE] = STKP[0];
+        force_maybemap_to_scalar(STKP);
+        force_maybemap_to_scalar(&STACK[parmbase+RETURN_VALUE]);
         zvalue_copy(&STACK[parmbase+RETURN_VALUE], STKP);
         drop();
         // Remove the local args (not supplied by caller) from TT.stack, check to
@@ -1517,22 +1514,18 @@ static int interpx(int start, int *status)
         break;
 
       case opmapdelete:
-        k = STKP->num;
-        if (k < 0) k = parmbase - k;    // loc of var on TT.stack
-        v = &STACK[k];
-        force_maybemap_to_map(v);
-        zmap_delete_map(v->map);
-        drop();
-        break;
-
       case tkdelete:
         k = STKP->num;
         if (k < 0) k = parmbase - k;    // loc of var on TT.stack
         v = &STACK[k];
         force_maybemap_to_map(v);
-        drop();
-        val_to_str(STKP);
-        zmap_delete(v->map, STKP->vst);
+        if (opcode == opmapdelete) {
+          zmap_delete_map(v->map);
+        } else {
+          drop();
+          val_to_str(STKP);
+          zmap_delete(v->map, STKP->vst);
+        }
         drop();
         break;
 
@@ -1541,7 +1534,7 @@ static int interpx(int start, int *status)
         k = op2 < 0 ? parmbase - op2 : op2;
         v = &STACK[k];
         force_maybemap_to_map(v);
-        if (!(IS_MAP(v))) FATAL("scalar in array context");
+        if (!IS_MAP(v)) FATAL("scalar in array context");
         v = get_map_val(v, STKP);
         drop();     // drop subscript
         push_val(v);
@@ -1560,7 +1553,7 @@ static int interpx(int start, int *status)
         op2 = *ip++;
         v = STKP-1;
         force_maybemap_to_map(v);
-        if (!(IS_MAP(v))) FATAL("scalar in array context");
+        if (!IS_MAP(v)) FATAL("scalar in array context");
         struct zmap *m = v->map;   // Need for MAPSLOT macro
         int zlen = zlist_len(&m->slot);
         int kk = STKP->num + 1;
@@ -1957,9 +1950,6 @@ static void init_globals(int optind, int argc, char **argv, char *sepstring,
   // a map, but we have to assume the possibility and attach a map to the
   // var. When/if the var is used as a map or scalar in the called function it
   // will be converted to a map or scalar as required.
-  // For now, if it is converted to a scalar, we just abandon the map.  This is
-  // sloppy but this situation should be rare and the maybe-map should (!) be
-  // empty.
   // See force_maybemap_to_scalar(), and the similar comment in
   // 'case tkfunction:' above.
   //

@@ -1026,6 +1026,7 @@ static void do_stmt(void)
     }
   }
   ZCODE[TT.cgl.continue_dest + 1] = TT.zcode_last - TT.cgl.continue_dest - 1;
+  optional_nl();
   expect(tkwhile);
   expect(tklparen);
   expr();

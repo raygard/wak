@@ -224,7 +224,6 @@ EXTERN void push_val(struct zvalue *v)
 
 EXTERN void zvalue_copy(struct zvalue *to, struct zvalue *from)
 {
-  if (from->flags & ZF_ANYMAP) FATAL("attempt to copy array var");
   if (IS_RX(from)) *to = *from;
   else {
     zvalue_release_zstring(to);
