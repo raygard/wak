@@ -5,16 +5,18 @@
  *
  * See https://pubs.opengroup.org/onlinepubs/9699919799/utilities/awk.html
 
-USE_AWK(NEWTOY(awk, "F:v*f*r", TOYFLAG_USR|TOYFLAG_BIN))
+USE_AWK(NEWTOY(awk, "F:v*f*c", TOYFLAG_USR|TOYFLAG_BIN))
 
 config AWK
   bool "awk"
   default n
   help
     usage:  awk [-F sepstring] [-v assignment]... program [argument...]
-       or:
+      or:
             awk [-F sepstring] -f progfile [-f progfile]... [-v assignment]...
-                   [argument...]
+                  [argument...]
+      also:
+      -c : compile only, do not run
 */
 
 #define FOR_awk

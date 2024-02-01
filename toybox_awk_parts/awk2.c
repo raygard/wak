@@ -12,5 +12,5 @@ void awk_main(void)
   }
   TT.progname = toys.which->name;
   toys.exitval = awk(sepstring, progstring, TT.f, TT.v,
-      optind, toys.optc, toys.optargs, !FLAG(r), environ, 0, 0);
+      optind, toys.optc, toys.optargs, !FLAG(c), environ, 0, 0);
 }
