@@ -1323,7 +1323,6 @@ static int interpx(int start, int *status)
         // or ... fieldref value_to_assign
         v = setup_lvalue(TT.stkptr-1, parmbase, &field_num);
         force_maybemap_to_scalar(STKP);
-        force_maybemap_to_scalar(v);
         zvalue_copy(v, STKP);
         swap();
         drop();
@@ -1461,8 +1460,7 @@ static int interpx(int start, int *status)
       case tkreturn:
         nparms = *ip++;
         nargs = STACK[parmbase+ARG_CNT].num;
-        force_maybemap_to_scalar(STKP);
-        force_maybemap_to_scalar(&STACK[parmbase+RETURN_VALUE]);
+        force_maybemap_to_scalar(STKP); // Unneeded?
         zvalue_copy(&STACK[parmbase+RETURN_VALUE], STKP);
         drop();
         // Remove the local args (not supplied by caller) from TT.stack, check to
