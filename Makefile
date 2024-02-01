@@ -132,14 +132,13 @@ CFLAGS = -O3 -funsigned-char -std=c99 -Wall -Wextra -W -Wpointer-arith -Wstrict-
 	$(CC) $(CFLAGS) -c $< -o $@
 
 clean :
-	-rm ./exe/wak
-	-rm ./asan/wak
-	-rm ./prof/wak
-	-rm ./mono/wak
-	-rm ./musl/wak
-	-rm ./win/wak.exe
-	-rm ./toybox/*
-	-rm ./objects/* ./asanobjects/* ./profobjects/* ./monoobjects/* ./muslobjects/* ./winobjects/* ./monosrc/*
+	-rm ./exe/*
+	-rm ./asan/*
+	-rm ./prof/*
+	-rm ./mono/*
+	-rm ./musl/*
+	-rm ./win/*
+	-rm ./objects/* ./asanobjects/* ./profobjects/* ./monoobjects/* ./muslobjects/* ./winobjects/*
 
 foo:
 	@echo cpp: $(SRC)
