@@ -249,13 +249,9 @@ static void complain(int tk)
   char op[3], tkstr[10];
   if (recovering) return;
   recovering = 1;
-  //char *TT.tokstr = TT.scs->tokstr;
   if (!strcmp(TT.tokstr, "\n")) TT.tokstr = "<newline>";
-//fprintf(stderr, "complain recover %s %d\n", TT.tokstr, tk);
   if (tksemi <= tk && tk <= tkpipe) {
-    //extern char *ops;
     get_token_text(op, tk);
-    //memmove(op, ops + (3 * tk - 29), 2);
     XERR("syntax near '%s' -- '%s' expected\n", TT.tokstr, op);
   } else if (tk >= tkin && tk <= tksubstr) {
     if (tk < tkatan2) memmove(tkstr, keywords + 1 + 10 * (tk - tkin), 10);
@@ -270,7 +266,6 @@ static void expect(int tk)
   if (recovering) {
     while (!ISTOK(tkeof) && !ISTOK(tk))
       scan();
-    //if (ISTOK(tkeof)) error_exit("(%d:) unexpected EOF\n", __LINE__);
     if (ISTOK(tkeof)) unexpected_eof();
     scan(); // consume expected token
     recovering = 0;

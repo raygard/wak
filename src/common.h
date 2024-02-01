@@ -6,7 +6,6 @@
 #ifndef MONOLITHIC
 
 #endif // MONOLITHIC
-
 #ifndef FOR_TOYBOX
 #ifndef __STDC_WANT_LIB_EXT2__
 #define __STDC_WANT_LIB_EXT2__ 1  // for getline(), getdelim()
@@ -377,7 +376,6 @@ EXTERN char *toknames[];
 
 
 EXTERN int trace_sw;
-EXTERN int opt_print_source;
 
 EXTERN struct compiler_globals cgl;
 
