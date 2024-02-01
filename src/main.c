@@ -82,8 +82,7 @@ int main(int argc, char **argv, char **envp)
       "               [-v assignment]...  [argument...]\n"
       "also:\n"
       "-V show version\n"
-      "-r do not run, just compile\n"
-      "-p print source\n"
+      "-c compile only, do not run\n"
   };
   char pbuf[PBUFSIZE];
   TT.pbuf = pbuf;
@@ -100,7 +99,7 @@ int main(int argc, char **argv, char **envp)
   struct arg_list *prog_args = 0, **tail_prog_args = &prog_args;
   struct arg_list *assign_args = 0, **tail_assign_args = &assign_args;
 
-  while ((opt = getopt(argc, argv, ":F:f:v:tsVzdD:pr")) != -1) {
+  while ((opt = getopt(argc, argv, "F:f:v:Vc")) != -1) {
     switch (opt) {
       case 'F':
         sepstring = escape_str(optarg);
@@ -115,7 +114,7 @@ int main(int argc, char **argv, char **envp)
         printf("<%s %s>\n", __DATE__, __TIME__);
         exit(0);
         break;
-      case 'r':
+      case 'c':
         opt_run_prog = 0;
         break;
         break;
@@ -135,9 +134,14 @@ int main(int argc, char **argv, char **envp)
   // Try user's locale, but if that isn't UTF-8 merge in a UTF-8 locale's
   // character type data. (Fall back to en_US for MacOS.)
   setlocale(LC_CTYPE, "");
-  if (strcmp("UTF-8", nl_langinfo(CODESET)))
-    uselocale(newlocale(LC_CTYPE_MASK, "C.UTF-8", 0) ? :
-      newlocale(LC_CTYPE_MASK, "en_US.UTF-8", 0));
+  //  if (strcmp("UTF-8", nl_langinfo(CODESET)))
+  //    uselocale(newlocale(LC_CTYPE_MASK, "C.UTF-8", 0) ? :
+  //      newlocale(LC_CTYPE_MASK, "en_US.UTF-8", 0));
+  // Avoid -pedantic warning for gcc extension on :? operator
+  if (strcmp("UTF-8", nl_langinfo(CODESET))) {
+    locale_t h = newlocale(LC_CTYPE_MASK, "C.UTF-8", 0);
+    uselocale(h ? h : newlocale(LC_CTYPE_MASK, "en_US.UTF-8", 0));
+  }
 #endif
 
   retval = awk(sepstring, progstring, prog_args, assign_args, optind, argc, argv,
