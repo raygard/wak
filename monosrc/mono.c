@@ -329,7 +329,6 @@ ssize_t getdelim(char ** restrict lineptr, size_t * restrict n, int delimiter, F
 #ifndef FOR_TOYBOX
 
 // Common (global) data
-#define xexit() exit(42)
 static struct global_data TT;
 #endif  // FOR_TOYBOX
 
@@ -355,6 +354,7 @@ static void error_exit(char *format, ...)
   va_start(args, format);
   vfprintf(stderr, format, args);
   va_end(args);
+  putc('\n', stderr);
   fflush(stderr);
   exit(42);
 }
@@ -362,28 +362,29 @@ static void error_exit(char *format, ...)
 static void *xmalloc(size_t size)
 {
   void *p = malloc(size);
-  if (!p) error_exit("%s\n", "Out of memory.");
+  if (!p) error_exit("xmalloc(%d)", size);
   return p;
 }
 
 static void *xrealloc(void *p, size_t size)
 {
   p = realloc(p, size);
-  if (!p) error_exit("%s\n", "Out of memory.");
+  if (!p) error_exit("xrealloc(%d)", size);
   return p;
 }
 
 static void *xzalloc(size_t size)
 {
   void *p = calloc(1, size);
-  if (!p) error_exit("%s\n", "Out of memory.");
+  if (!p) error_exit("xzalloc(%d)", size);
   return p;
 }
 
 static char *xstrdup(char *s)
 {
-  char *p = strdup(s);
-  if (!p) error_exit("%s\n", "Out of memory.");
+  size_t n = strlen(s) + 1;
+  char *p = xmalloc(n);
+  memmove(p, s, n);
   return p;
 }
 
@@ -439,7 +440,7 @@ static void zzerr(char *format, ...)
   va_end(args);
   if (format[strlen(format)-1] != '\n') fputc('\n', stderr); // TEMP FIXME !!!
   fflush(stderr);
-  if (fatal_sw) xexit();
+  if (fatal_sw) exit(2);
         // Don't bump error count for warnings
   else if (!strstr(format, "arning")) TT.cgl.compile_error_count++;
 }
@@ -474,7 +475,7 @@ static void zlist_expand(struct zlist *p)
   size_t offset = p->avail - p->base;
   size_t cap = p->limit - p->base;
   size_t newcap = maxof(cap + p->size, ((cap / p->size) * 3 / 2) * p->size);
-  if (newcap <= cap) error_exit("bad memory request.\n");
+  if (newcap <= cap) error_exit("mem req error");
   char *base = xrealloc(p->base, newcap);
   p->base = base;
   p->limit = base + newcap;
@@ -799,7 +800,7 @@ static void progfile_open(void)
   TT.scs->prog_args = TT.scs->prog_args->next;
   TT.scs->fp = stdin;
   if (strcmp(TT.scs->filename, "-")) TT.scs->fp = fopen(TT.scs->filename, "r");
-  if (!TT.scs->fp) error_exit("Can't open %s.\n", TT.scs->filename);
+  if (!TT.scs->fp) error_exit("Can't open %s", TT.scs->filename);
   TT.scs->line_num = 0;
 }
 
@@ -2650,7 +2651,7 @@ static int match(struct zvalue *zvsubject, struct zvalue *zvpat)
       char errbuf[256];
       regerror(r, &rx, errbuf, sizeof(errbuf));
       // FIXME TODO better diagnostic here
-      error_exit("regex match error %d: %s\n", r, errbuf);
+      error_exit("regex match error %d: %s", r, errbuf);
     }
     rx_zvalue_free(rxp, zvpat);
     return 1;
@@ -2841,7 +2842,7 @@ static void rebuild_field0(void)
 // Called by setup_lvalue()
 static struct zvalue *get_field_ref(int fnum)
 {
-  if (fnum < 0 || fnum > FIELDS_MAX) error_exit("bad field num %d\n", fnum);
+  if (fnum < 0 || fnum > FIELDS_MAX) error_exit("bad field num %d", fnum);
   if (fnum > TT.nf_internal) {
     // Ensure TT.fields list is large enough for fnum
     // Need len of TT.fields to be > fnum b/c e.g. fnum==1 implies 2 TT.fields
@@ -2898,7 +2899,7 @@ static void fixup_fields(int fnum)
 // Called by tkfield op       // TODO inline it?
 static void push_field(int fnum)
 {
-  if (fnum < 0 || fnum > FIELDS_MAX) error_exit("bad field num %d\n", fnum);
+  if (fnum < 0 || fnum > FIELDS_MAX) error_exit("bad field num %d", fnum);
   // Contrary to posix, awk evaluates TT.fields beyond $NF as empty strings.
   if (fnum > TT.nf_internal) push_val(&uninit_string_zvalue);
   else push_val(&FIELD[fnum]);
@@ -3328,7 +3329,7 @@ static int assign_global(char *var, char *value)
   int globals_ent = find_global(var);
   if (globals_ent) {
     struct zvalue *v = &STACK[globals_ent];
-    if (IS_MAP(v)) error_exit("-v assignment to array\n");  // Maybe not needed?
+    if (IS_MAP(v)) error_exit("-v assignment to array");  // Maybe not needed?
     zvalue_release_zstring(v);
     value = xstrdup(value);
     *v = new_str_val(escape_str(value));
@@ -4394,7 +4395,7 @@ static int interpx(int start, int *status)
           break;
         }
         // This should never happen:
-        error_exit("!!! Unimplemented opcode %d\n", opcode);
+        error_exit("!!! Unimplemented opcode %d", opcode);
     }
   }
   return opquit;
@@ -4414,7 +4415,7 @@ static int interp(int start, int *status)
     TT.stkptr = stkptrbefore;
   }
   if (TT.stkptr - stkptrbefore)
-    error_exit("!!AWK BUG stack pointer offset: %d\n", TT.stkptr - stkptrbefore);
+    error_exit("!!AWK BUG stack pointer offset: %d", TT.stkptr - stkptrbefore);
   return r;
 }
 
@@ -4511,7 +4512,7 @@ static void init_globals(int optind, int argc, char **argv, char *sepstring,
   for (struct arg_list *p = assign_args; p; p = p->next) {
     char *asgn = p->arg;
     char *val = strchr(asgn, '=');
-    if (!val) error_exit("bad -v assignment format\n");
+    if (!val) error_exit("bad -v assignment format");
     *val++ = 0;
     assign_global(asgn, val);
   }

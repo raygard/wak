@@ -44,7 +44,7 @@ EXTERN void zzerr(char *format, ...)
   va_end(args);
   if (format[strlen(format)-1] != '\n') fputc('\n', stderr); // TEMP FIXME !!!
   fflush(stderr);
-  if (fatal_sw) xexit();
+  if (fatal_sw) exit(2);
         // Don't bump error count for warnings
   else if (!strstr(format, "arning")) TT.cgl.compile_error_count++;
 }
@@ -79,7 +79,7 @@ static void zlist_expand(struct zlist *p)
   size_t offset = p->avail - p->base;
   size_t cap = p->limit - p->base;
   size_t newcap = maxof(cap + p->size, ((cap / p->size) * 3 / 2) * p->size);
-  if (newcap <= cap) error_exit("bad memory request.\n");
+  if (newcap <= cap) error_exit("mem req error");
   char *base = xrealloc(p->base, newcap);
   p->base = base;
   p->limit = base + newcap;

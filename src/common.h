@@ -341,7 +341,6 @@ ssize_t getdelim(char ** restrict lineptr, size_t * restrict n, int delimiter, F
 #ifndef FOR_TOYBOX
 
 // Common (global) data
-#define xexit() exit(42)
 EXTERN struct global_data TT;
 #endif  // FOR_TOYBOX
 

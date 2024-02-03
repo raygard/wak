@@ -24,7 +24,7 @@ static void progfile_open(void)
   TT.scs->prog_args = TT.scs->prog_args->next;
   TT.scs->fp = stdin;
   if (strcmp(TT.scs->filename, "-")) TT.scs->fp = fopen(TT.scs->filename, "r");
-  if (!TT.scs->fp) error_exit("Can't open %s.\n", TT.scs->filename);
+  if (!TT.scs->fp) error_exit("Can't open %s", TT.scs->filename);
   TT.scs->line_num = 0;
 }
 

@@ -22,6 +22,7 @@ EXTERN void error_exit(char *format, ...)
   va_start(args, format);
   vfprintf(stderr, format, args);
   va_end(args);
+  putc('\n', stderr);
   fflush(stderr);
   exit(42);
 }
@@ -29,28 +30,29 @@ EXTERN void error_exit(char *format, ...)
 EXTERN void *xmalloc(size_t size)
 {
   void *p = malloc(size);
-  if (!p) error_exit("%s\n", "Out of memory.");
+  if (!p) error_exit("xmalloc(%d)", size);
   return p;
 }
 
 EXTERN void *xrealloc(void *p, size_t size)
 {
   p = realloc(p, size);
-  if (!p) error_exit("%s\n", "Out of memory.");
+  if (!p) error_exit("xrealloc(%d)", size);
   return p;
 }
 
 EXTERN void *xzalloc(size_t size)
 {
   void *p = calloc(1, size);
-  if (!p) error_exit("%s\n", "Out of memory.");
+  if (!p) error_exit("xzalloc(%d)", size);
   return p;
 }
 
 EXTERN char *xstrdup(char *s)
 {
-  char *p = strdup(s);
-  if (!p) error_exit("%s\n", "Out of memory.");
+  size_t n = strlen(s) + 1;
+  char *p = xmalloc(n);
+  memmove(p, s, n);
   return p;
 }
 
