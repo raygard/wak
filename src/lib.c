@@ -24,7 +24,7 @@ EXTERN void error_exit(char *format, ...)
   va_end(args);
   putc('\n', stderr);
   fflush(stderr);
-  exit(42);
+  exit(2);
 }
 
 EXTERN void *xmalloc(size_t size)

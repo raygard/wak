@@ -206,8 +206,8 @@ static size_t zlist_append_zvalue(struct zlist *p, struct zvalue *v)
     zlist_expand(p);
   }
   *(struct zvalue *)p->avail = *v;
-  p->avail += p->size;
-  return (p->avail - p->base - p->size) / p->size;  // offset of updated slot
+  p->avail += sizeof(*v);
+  return (p->avail - p->base - sizeof(*v)) / sizeof(*v);  // offset of new slot
 }
 
 // push_val() is used for initializing globals (see init_compiler())
@@ -218,7 +218,7 @@ static size_t zlist_append_zvalue(struct zlist *p, struct zvalue *v)
 // pushed, invalidating the v pointer.
 EXTERN void push_val(struct zvalue *v)
 {
-  if (IS_STR(v)) zstring_incr_refcnt(v->vst);
+  if (IS_STR(v) && v->vst) v->vst->refcnt++;  // inlined zstring_incr_refcnt()
   TT.stkptr = zlist_append_zvalue(&TT.stack, v);
 }
 
