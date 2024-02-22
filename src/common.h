@@ -162,9 +162,9 @@ struct global_data {
   char *tokstr;
   // For checking end of prev statement for termination and if '/' can come next
   int prevtok;
-  struct zlist globals_table;      // global symbol table
-  struct zlist locals_table;       // local symbol table
-  struct zlist func_def_table;     // function symbol table
+  struct zlist globals_table;       // global symbol table
+  struct zlist locals_table;        // local symbol table
+  struct zlist func_def_table;      // function symbol table
 
   struct zlist literals;
   struct zlist fields;
@@ -172,9 +172,9 @@ struct global_data {
   struct zlist stack;
   char *progname;
   struct compiler_globals cgl;
-  int spec_var_limit;              // used in compile.c and run.c
-  int zcode_last;                  // used in only in compile.c
-  int stkptr;      // used in run.c and (once) in compile.c
+  int spec_var_limit;               // used in compile.c and run.c
+  int zcode_last;                   // used in only in compile.c
+  struct zvalue *stackp;            // ptr to top of runtime stack
 
   struct runtime_globals rgl;
 
@@ -296,6 +296,9 @@ struct zstring {
 
 #define FUNC_DEFINED    (1u)
 #define FUNC_CALLED     (2u)
+
+#define MIN_STACK_LEFT 1024
+
 struct functab_slot {    // function symbol table entry
   unsigned flags;
   int slotnum;
@@ -391,7 +394,9 @@ EXTERN char *xstrdup(char *s);
 EXTERN double str_to_num(char *s);
 EXTERN int hexval(int c);
 EXTERN char *rx_escape_str(char *s);
+EXTERN struct zlist *zlist_initx(struct zlist *p, size_t size, size_t count);
 EXTERN struct zlist *zlist_init(struct zlist *p, size_t size);
+EXTERN void zlist_expand(struct zlist *p);
 EXTERN size_t zlist_append(struct zlist *p, void *obj);
 EXTERN int zlist_len(struct zlist *p);
 EXTERN void get_token_text(char *op, int tk);

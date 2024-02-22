@@ -168,7 +168,11 @@ static void init_tables(void)
   zlist_init(&TT.zcode, sizeof(int));
   gencd(tkeof);   // to ensure zcode offsets are non-zero
   zlist_init(&TT.literals, sizeof(struct zvalue));
-  zlist_init(&TT.stack, sizeof(struct zvalue));
+  // Init stack size at twice MIN_STACK_LEFT. MIN_STACK_LEFT is at least as
+  // many entries as any statement may ever take.  Currently there is no diag
+  // if this is exceeded; prog. will probably crash. 1024 should be plenty?
+  zlist_initx(&TT.stack, sizeof(struct zvalue), 2 * MIN_STACK_LEFT);
+  TT.stackp = (struct zvalue *)TT.stack.base;
   zlist_init(&TT.fields, sizeof(struct zvalue));
   zlist_append(&TT.literals, &uninit_zvalue);
   zlist_append(&TT.stack, &uninit_zvalue);

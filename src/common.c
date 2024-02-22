@@ -60,7 +60,7 @@ EXTERN void get_token_text(char *op, int tk)
 ////   zlist
 ////////////////////
 
-static struct zlist *zlist_initx(struct zlist *p, size_t size, size_t count)
+EXTERN struct zlist *zlist_initx(struct zlist *p, size_t size, size_t count)
 {
   p->base = p->avail = xzalloc(count * size);
   p->limit = p->base + size * count;
@@ -74,7 +74,8 @@ EXTERN struct zlist *zlist_init(struct zlist *p, size_t size)
   return zlist_initx(p, size, SLIST_MAX_INIT_BYTES / size);
 }
 
-static void zlist_expand(struct zlist *p)
+// This is called from zlist_append() and add_stack() in run
+EXTERN void zlist_expand(struct zlist *p)
 {
   size_t offset = p->avail - p->base;
   size_t cap = p->limit - p->base;
@@ -197,19 +198,6 @@ EXTERN void zvalue_release_zstring(struct zvalue *v)
   if (v && ! (v->flags & (ZF_ANYMAP | ZF_RX))) zstring_release(&v->vst);
 }
 
-static size_t zlist_append_zvalue(struct zlist *p, struct zvalue *v)
-{
-  struct zvalue vtemp;
-  if (p->avail > p->limit - sizeof(*v)) {
-    vtemp = *v;
-    v = &vtemp;
-    zlist_expand(p);
-  }
-  *(struct zvalue *)p->avail = *v;
-  p->avail += sizeof(*v);
-  return (p->avail - p->base - sizeof(*v)) / sizeof(*v);  // offset of new slot
-}
-
 // push_val() is used for initializing globals (see init_compiler())
 // but mostly used in runtime
 // WARNING: push_val may change location of v, so do NOT depend on it after!
@@ -219,7 +207,7 @@ static size_t zlist_append_zvalue(struct zlist *p, struct zvalue *v)
 EXTERN void push_val(struct zvalue *v)
 {
   if (IS_STR(v) && v->vst) v->vst->refcnt++;  // inlined zstring_incr_refcnt()
-  TT.stkptr = zlist_append_zvalue(&TT.stack, v);
+  *++TT.stackp = *v;
 }
 
 EXTERN void zvalue_copy(struct zvalue *to, struct zvalue *from)

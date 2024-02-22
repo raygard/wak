@@ -112,7 +112,7 @@ GLOBALS(
 
   int spec_var_limit;
   int zcode_last;
-  int stkptr;
+  struct zvalue *stackp;  // top of stack ptr
 
   char *pbuf;   // Used for number formatting in num_to_zstring()
 #define RS_MAX  64
