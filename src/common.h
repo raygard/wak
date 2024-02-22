@@ -354,27 +354,10 @@ EXTERN int rx_compile(regex_t *rx, char *pat);
 #ifndef MONOLITHIC
 EXTERN char *escape_str(char *s);
 EXTERN char *progname;
-EXTERN FILE *debout;    // Only for debugging
-EXTERN unsigned debug_flags;
-EXTERN void dprimpl(unsigned df, char *format, ...);
-
-EXTERN void dump_func_table(void);
-EXTERN void dump_stack(char *label);
-EXTERN void dump_zcode(void);
-EXTERN void dump_tables(void);
-
-EXTERN void dump_zlist(char *label, struct zlist *z);
-EXTERN void dump_zstring(char *label, struct zstring *s);
-EXTERN void dump_zstringx(char *label, struct zstring *s);
-EXTERN void dumpstrx(char *s, int n);
-EXTERN void dumpstr(char *s);
-EXTERN void dump_zvalue(char *label, struct zvalue *v);
-
 EXTERN struct zvalue uninit_zvalue;
 EXTERN struct zvalue uninit_string_zvalue;
 
 EXTERN char *ops, *keywords, *builtins;
-EXTERN char *toknames[];
 
 
 EXTERN int trace_sw;

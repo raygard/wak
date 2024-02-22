@@ -54,7 +54,6 @@ static int awk(char *sepstring, char *progstring, struct arg_list *prog_args,
   return TT.cgl.compile_error_count;
 }
 
-EXTERN int trace_sw = 0;
 #ifndef FOR_TOYBOX
 
 static struct arg_list **new_arg(struct arg_list **pnext, char *arg)
