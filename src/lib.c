@@ -27,6 +27,42 @@ EXTERN void error_exit(char *format, ...)
   exit(2);
 }
 
+// Compile a regular expression into a regex_t
+EXTERN void xregcomp(regex_t *preg, char *regex, int cflags)
+{
+  // Borrowed from Rob Landley's toybox
+  // Copyright 2006 Rob Landley <rob@landley.net>
+  // License: 0BSD
+  int rc;
+  char libbuf[256]; // Added by rdg
+  // BSD regex implementations don't support the empty regex (which isn't
+  // allowed in the POSIX grammar), but glibc does. Fake it for BSD.
+  if (!*regex) {
+    regex = "()";
+    cflags |= REG_EXTENDED;
+  }
+
+  if ((rc = regcomp(preg, regex, cflags))) {
+    regerror(rc, preg, libbuf, sizeof(libbuf));
+    error_exit("bad regex '%s': %s", regex, libbuf);
+  }
+}
+
+// Do regex matching with len argument to handle embedded NUL bytes in string
+EXTERN int regexec0(regex_t *preg, char *string, long len, int nmatch,
+  regmatch_t *pmatch, int eflags)
+{
+  // Borrowed from Rob Landley's toybox
+  // Copyright 2006 Rob Landley <rob@landley.net>
+  // License: 0BSD
+  regmatch_t backup;
+
+  if (!nmatch) pmatch = &backup;
+  pmatch->rm_so = 0;
+  pmatch->rm_eo = len;
+  return regexec(preg, string, nmatch, pmatch, eflags|REG_STARTEND);
+}
+
 EXTERN void *xmalloc(size_t size)
 {
   void *p = malloc(size);

@@ -43,6 +43,10 @@
 #ifndef FOR_TOYBOX
 #define maxof(a,b) ((a)>(b)?(a):(b))
 
+#ifndef REG_STARTEND
+#define REG_STARTEND 0
+#endif
+
 struct arg_list {
   struct arg_list *next;
   char *arg;
@@ -337,7 +341,7 @@ static struct global_data TT;
 
 // Forward ref declarations
 static struct zvalue *val_to_str(struct zvalue *v);
-static int rx_compile(regex_t *rx, char *pat);
+static void rx_compile(regex_t *rx, char *pat);
 
 
 ////////////////////
@@ -360,6 +364,42 @@ static void error_exit(char *format, ...)
   putc('\n', stderr);
   fflush(stderr);
   exit(2);
+}
+
+// Compile a regular expression into a regex_t
+static void xregcomp(regex_t *preg, char *regex, int cflags)
+{
+  // Borrowed from Rob Landley's toybox
+  // Copyright 2006 Rob Landley <rob@landley.net>
+  // License: 0BSD
+  int rc;
+  char libbuf[256]; // Added by rdg
+  // BSD regex implementations don't support the empty regex (which isn't
+  // allowed in the POSIX grammar), but glibc does. Fake it for BSD.
+  if (!*regex) {
+    regex = "()";
+    cflags |= REG_EXTENDED;
+  }
+
+  if ((rc = regcomp(preg, regex, cflags))) {
+    regerror(rc, preg, libbuf, sizeof(libbuf));
+    error_exit("bad regex '%s': %s", regex, libbuf);
+  }
+}
+
+// Do regex matching with len argument to handle embedded NUL bytes in string
+static int regexec0(regex_t *preg, char *string, long len, int nmatch,
+  regmatch_t *pmatch, int eflags)
+{
+  // Borrowed from Rob Landley's toybox
+  // Copyright 2006 Rob Landley <rob@landley.net>
+  // License: 0BSD
+  regmatch_t backup;
+
+  if (!nmatch) pmatch = &backup;
+  pmatch->rm_so = 0;
+  pmatch->rm_eo = len;
+  return regexec(preg, string, nmatch, pmatch, eflags|REG_STARTEND);
 }
 
 static void *xmalloc(size_t size)
@@ -1183,7 +1223,7 @@ static int make_literal_regex_val(char *s)
 {
   regex_t *rx;
   rx = xmalloc(sizeof(*rx));
-  if (rx_compile(rx, s)) XERR("regex seen as '%s'\n", s);
+  rx_compile(rx, s);
   struct zvalue v = ZVINIT(ZF_RX, 0, 0);
   v.rx = rx;
   // Flag empty rx to make it easy to identify for split() special case
@@ -2602,20 +2642,9 @@ static char *rx_escape_str(char *s)
   return s0;
 }
 
-static int rx_compile(regex_t *rx, char *pat)
+static void rx_compile(regex_t *rx, char *pat)
 {
-  int r;
-  if ((r = regcomp(rx, pat, REG_EXTENDED)) != 0) {
-    char errbuf[256];
-    regerror(r, rx, errbuf, sizeof(errbuf));
-    error_exit("regex error %d: %s on '%s' -- ", r, errbuf, pat);
-  }
-  return r;
-}
-
-static void rx_compile_or_die(regex_t *rx, char *pat)
-{
-  if (rx_compile(rx, pat)) FATAL("bad regex\n");
+  xregcomp(rx, pat, REG_EXTENDED);
 }
 
 static void rx_zvalue_compile(regex_t **rx, struct zvalue *pat)
@@ -2625,7 +2654,7 @@ static void rx_zvalue_compile(regex_t **rx, struct zvalue *pat)
     val_to_str(pat);
     zvalue_dup_zstring(pat);
     rx_escape_str(pat->vst->str);
-    rx_compile_or_die(*rx, pat->vst->str);
+    rx_compile(*rx, pat->vst->str);
   }
 }
 
@@ -2716,7 +2745,7 @@ static regex_t *rx_fs_prep(char *fs)
   if (strlen(fs) >= FS_MAX) FATAL("FS too long");
   strcpy(TT.fs_last, fs);
   regfree(&TT.rx_last);
-  rx_compile_or_die(&TT.rx_last, fmt_one_char_fs(fs));
+  rx_compile(&TT.rx_last, fmt_one_char_fs(fs));
   return &TT.rx_last;
 }
 
@@ -3433,6 +3462,17 @@ static ssize_t getrec_multiline(struct zfile *zfp)
   return k;
 }
 
+static int rx_findx(regex_t *rx, char *s, long len, regoff_t *start, regoff_t *end, int eflags)
+{
+  regmatch_t matches[1];
+  int r = regexec0(rx, s, len, 1, matches, eflags);
+  if (r == REG_NOMATCH) return r;
+  if (r) FATAL("regexec error");  // TODO ? use regerr() to meaningful msg
+  *start = matches[0].rm_so;
+  *end = matches[0].rm_eo;
+  return 0;
+}
+
 static ssize_t getrec_f(struct zfile *zfp)
 {
   int r = 0, rs = ENSURE_STR(&STACK[RS])->vst->str[0] & 0xff;
@@ -3454,7 +3494,7 @@ static ssize_t getrec_f(struct zfile *zfp)
       if (!zfp->endoffs) break;
     }
     TT.rgl.recptr = zfp->recbuf + zfp->recoffs;
-    r = rx_find(rsrxp, TT.rgl.recptr, &so, &eo, REG_NOTBOL | REG_NOTEOL);
+    r = rx_findx(rsrxp, TT.rgl.recptr, zfp->endoffs - zfp->recoffs, &so, &eo, 0);
     // if not found, or found "near" end of buffer...
     if (r || zfp->recoffs + eo > (int)zfp->recbufsize - RS_LENGTH_MARGIN) {
       // if at end of data, and (not found or found at end of data)
@@ -4564,9 +4604,9 @@ static void run(int optind, int argc, char **argv, char *sepstring,
   char *printf_fmt_rx = "%[-+ #0']*([*]|[0-9]*)([.]([*]|[0-9]*))?[aAdiouxXfFeEgGcs%]";
   init_globals(optind, argc, argv, sepstring, assign_args, envp);
   TT.cfile = xzalloc(sizeof(struct zfile));
-  rx_compile_or_die(&TT.rx_default, "[ \t\n]+");
-  rx_compile_or_die(&TT.rx_last, "[ \t\n]+");
-  rx_compile_or_die(&TT.rx_printf_fmt, printf_fmt_rx);
+  rx_compile(&TT.rx_default, "[ \t\n]+");
+  rx_compile(&TT.rx_last, "[ \t\n]+");
+  rx_compile(&TT.rx_printf_fmt, printf_fmt_rx);
   new_file("-", stdin, 'r', 'f')->is_std_file = 1;
   new_file("/dev/stdin", stdin, 'r', 'f')->is_std_file = 1;
   new_file("/dev/stdout", stdout, 'w', 'f')->is_std_file = 1;

@@ -55,7 +55,7 @@ static int make_literal_regex_val(char *s)
 {
   regex_t *rx;
   rx = xmalloc(sizeof(*rx));
-  if (rx_compile(rx, s)) XERR("regex seen as '%s'\n", s);
+  rx_compile(rx, s);
   struct zvalue v = ZVINIT(ZF_RX, 0, 0);
   v.rx = rx;
   // Flag empty rx to make it easy to identify for split() special case

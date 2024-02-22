@@ -54,6 +54,10 @@
 #ifndef FOR_TOYBOX
 #define maxof(a,b) ((a)>(b)?(a):(b))
 
+#ifndef REG_STARTEND
+#define REG_STARTEND 0
+#endif
+
 struct arg_list {
   struct arg_list *next;
   char *arg;
@@ -349,7 +353,7 @@ EXTERN struct global_data TT;
 
 // Forward ref declarations
 EXTERN struct zvalue *val_to_str(struct zvalue *v);
-EXTERN int rx_compile(regex_t *rx, char *pat);
+EXTERN void rx_compile(regex_t *rx, char *pat);
 
 #ifndef MONOLITHIC
 EXTERN char *escape_str(char *s);
@@ -368,6 +372,9 @@ EXTERN void zvalue_dup_zstring(struct zvalue *v);
 
 EXTERN void zzerr(char *format, ...);
 
+EXTERN void xregcomp(regex_t *preg, char *regex, int cflags);
+EXTERN int regexec0(regex_t *preg, char *string, long len, int nmatch,
+  regmatch_t *pmatch, int eflags);
 EXTERN void error_exit(char *format, ...);
 EXTERN void xfree(void *p);
 EXTERN void *xmalloc(size_t size);
