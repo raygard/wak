@@ -354,7 +354,6 @@ EXTERN struct global_data TT;
 
 // Forward ref declarations
 EXTERN struct zvalue *val_to_str(struct zvalue *v);
-EXTERN void rx_compile(regex_t *rx, char *pat);
 
 #ifndef MONOLITHIC
 EXTERN char *escape_str(char *s);
@@ -364,8 +363,6 @@ EXTERN struct zvalue uninit_string_zvalue;
 
 EXTERN char *ops, *keywords, *builtins;
 
-
-EXTERN int trace_sw;
 
 EXTERN struct compiler_globals cgl;
 

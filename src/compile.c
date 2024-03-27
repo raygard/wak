@@ -55,7 +55,7 @@ static int make_literal_regex_val(char *s)
 {
   regex_t *rx;
   rx = xmalloc(sizeof(*rx));
-  rx_compile(rx, s);
+  xregcomp(rx, s, REG_EXTENDED);
   struct zvalue v = ZVINIT(ZF_RX, 0, 0);
   v.rx = rx;
   // Flag empty rx to make it easy to identify for split() special case
@@ -337,7 +337,6 @@ static void map_name(void)
   check_set_map(slotnum = find_or_add_var_name());
   gen2cd(tkvar, slotnum);
 }
-
 
 static void check_builtin_arg_counts(int tk, int num_args, char *fname)
 {

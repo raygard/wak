@@ -342,7 +342,6 @@ static struct global_data TT;
 
 // Forward ref declarations
 static struct zvalue *val_to_str(struct zvalue *v);
-static void rx_compile(regex_t *rx, char *pat);
 
 
 ////////////////////
@@ -1224,7 +1223,7 @@ static int make_literal_regex_val(char *s)
 {
   regex_t *rx;
   rx = xmalloc(sizeof(*rx));
-  rx_compile(rx, s);
+  xregcomp(rx, s, REG_EXTENDED);
   struct zvalue v = ZVINIT(ZF_RX, 0, 0);
   v.rx = rx;
   // Flag empty rx to make it easy to identify for split() special case
@@ -1506,7 +1505,6 @@ static void map_name(void)
   check_set_map(slotnum = find_or_add_var_name());
   gen2cd(tkvar, slotnum);
 }
-
 
 static void check_builtin_arg_counts(int tk, int num_args, char *fname)
 {
@@ -2639,11 +2637,6 @@ static char *rx_escape_str(char *s)
   return s0;
 }
 
-static void rx_compile(regex_t *rx, char *pat)
-{
-  xregcomp(rx, pat, REG_EXTENDED);
-}
-
 static void rx_zvalue_compile(regex_t **rx, struct zvalue *pat)
 {
   if (IS_RX(pat)) *rx = pat->rx;
@@ -2651,7 +2644,7 @@ static void rx_zvalue_compile(regex_t **rx, struct zvalue *pat)
     val_to_str(pat);
     zvalue_dup_zstring(pat);
     rx_escape_str(pat->vst->str);
-    rx_compile(*rx, pat->vst->str);
+    xregcomp(*rx, pat->vst->str, REG_EXTENDED);
   }
 }
 
@@ -2742,7 +2735,7 @@ static regex_t *rx_fs_prep(char *fs)
   if (strlen(fs) >= FS_MAX) FATAL("FS too long");
   strcpy(TT.fs_last, fs);
   regfree(&TT.rx_last);
-  rx_compile(&TT.rx_last, fmt_one_char_fs(fs));
+  xregcomp(&TT.rx_last, fmt_one_char_fs(fs), REG_EXTENDED);
   return &TT.rx_last;
 }
 
@@ -4600,9 +4593,9 @@ static void run(int optind, int argc, char **argv, char *sepstring,
   char *printf_fmt_rx = "%[-+ #0']*([*]|[0-9]*)([.]([*]|[0-9]*))?[aAdiouxXfFeEgGcs%]";
   init_globals(optind, argc, argv, sepstring, assign_args);
   TT.cfile = xzalloc(sizeof(struct zfile));
-  rx_compile(&TT.rx_default, "[ \t\n]+");
-  rx_compile(&TT.rx_last, "[ \t\n]+");
-  rx_compile(&TT.rx_printf_fmt, printf_fmt_rx);
+  xregcomp(&TT.rx_default, "[ \t\n]+", REG_EXTENDED);
+  xregcomp(&TT.rx_last, "[ \t\n]+", REG_EXTENDED);
+  xregcomp(&TT.rx_printf_fmt, printf_fmt_rx, REG_EXTENDED);
   new_file("-", stdin, 'r', 'f')->is_std_file = 1;
   new_file("/dev/stdin", stdin, 'r', 'f')->is_std_file = 1;
   new_file("/dev/stdout", stdout, 'w', 'f')->is_std_file = 1;

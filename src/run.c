@@ -65,11 +65,6 @@ EXTERN char *rx_escape_str(char *s)
   return s0;
 }
 
-EXTERN void rx_compile(regex_t *rx, char *pat)
-{
-  xregcomp(rx, pat, REG_EXTENDED);
-}
-
 static void rx_zvalue_compile(regex_t **rx, struct zvalue *pat)
 {
   if (IS_RX(pat)) *rx = pat->rx;
@@ -77,7 +72,7 @@ static void rx_zvalue_compile(regex_t **rx, struct zvalue *pat)
     val_to_str(pat);
     zvalue_dup_zstring(pat);
     rx_escape_str(pat->vst->str);
-    rx_compile(*rx, pat->vst->str);
+    xregcomp(*rx, pat->vst->str, REG_EXTENDED);
   }
 }
 
@@ -168,7 +163,7 @@ static regex_t *rx_fs_prep(char *fs)
   if (strlen(fs) >= FS_MAX) FATAL("FS too long");
   strcpy(TT.fs_last, fs);
   regfree(&TT.rx_last);
-  rx_compile(&TT.rx_last, fmt_one_char_fs(fs));
+  xregcomp(&TT.rx_last, fmt_one_char_fs(fs), REG_EXTENDED);
   return &TT.rx_last;
 }
 
@@ -2026,9 +2021,9 @@ EXTERN void run(int optind, int argc, char **argv, char *sepstring,
   char *printf_fmt_rx = "%[-+ #0']*([*]|[0-9]*)([.]([*]|[0-9]*))?[aAdiouxXfFeEgGcs%]";
   init_globals(optind, argc, argv, sepstring, assign_args);
   TT.cfile = xzalloc(sizeof(struct zfile));
-  rx_compile(&TT.rx_default, "[ \t\n]+");
-  rx_compile(&TT.rx_last, "[ \t\n]+");
-  rx_compile(&TT.rx_printf_fmt, printf_fmt_rx);
+  xregcomp(&TT.rx_default, "[ \t\n]+", REG_EXTENDED);
+  xregcomp(&TT.rx_last, "[ \t\n]+", REG_EXTENDED);
+  xregcomp(&TT.rx_printf_fmt, printf_fmt_rx, REG_EXTENDED);
   new_file("-", stdin, 'r', 'f')->is_std_file = 1;
   new_file("/dev/stdin", stdin, 'r', 'f')->is_std_file = 1;
   new_file("/dev/stdout", stdout, 'w', 'f')->is_std_file = 1;
