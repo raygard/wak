@@ -2925,12 +2925,13 @@ static void push_field(int fnum)
 
 #define STKP    TT.stackp   // pointer to top of stack
 
+#ifndef FOR_TOYBOX
 // Random number generator
 // Extracted from http://www.cs.ucl.ac.uk/staff/d.jones/GoodPracticeRNG.pdf
 // modified to encapsulate state and add seed function.
 static struct jkiss32_state {
-  unsigned x, y, z, w, c, seed;
-} jkst = {123456789, 234567891, 345678912, 456789123, 0, 1};
+  unsigned x, y, z, w, c;
+} jkst = {123456789, 234567891, 345678912, 456789123, 0};
 
 static unsigned jkiss32(void)
 {
@@ -2941,15 +2942,23 @@ static unsigned jkiss32(void)
   return jkst.x + jkst.y + jkst.w;
 }
 
-static unsigned seed_jkiss32(unsigned n)
+static void seed_jkiss32(unsigned n)
 {
-  unsigned r = jkst.seed;
   if (!n) n = 1;
-  jkst = (struct jkiss32_state){n*123456789, n*234567891, n*345678912, n*456789123, 0, n};
+  jkst = (struct jkiss32_state){n*123456789, n*234567891, n*345678912, n*456789123, 0};
   if (n > 1) for (n = 10000; n--;) jkiss32();
-  return r;
 }
 // END Random number generator
+#define random(x) (jkiss32(x) >> 1)
+#define srandom(x) seed_jkiss32(x)
+#endif  // FOR_TOYBOX
+static double seedrand(double seed)
+{
+  static double prev_seed;
+  double r = prev_seed;
+  srandom(trunc(prev_seed = seed));
+  return r;
+}
 
 static int popnumval(void)
 {
@@ -3687,17 +3696,15 @@ static void math_builtin(int opcode, int nargs)
       break;
     case tkrand:
       push_int_val(0);
-      // STKP->num = rand(); // Not good in most libc implementations
-      // STKP->num = (double)jkiss32() / 4294967296.0;
-      // The above doesn't get all 53 mantissa bits in play. This does:
+      // Get all 53 mantissa bits in play:
       // (upper 26 bits * 2^27 + upper 27 bits) / 2^53
-      double a = (jkiss32() >> 6) * 134217728.0;
-      STKP->num = (a + (jkiss32() >> 5)) / 9007199254740992.0;
+      STKP->num = 
+        ((random() >> 5) * 134217728.0 + (random() >> 4)) / 9007199254740992.0;
       break;
     case tksrand:
       if (nargs == 1) {
-        STKP->num = seed_jkiss32((unsigned)trunc(val_to_num(STKP)));
-      } else push_int_val(seed_jkiss32((unsigned)millinow()));
+        STKP->num = seedrand(val_to_num(STKP));
+      } else push_int_val(seedrand(millinow()));
       break;
     default:
       if (tkcos <= opcode && opcode <= tksqrt) {
@@ -4578,7 +4585,7 @@ static void run(int optind, int argc, char **argv, char *sepstring,
   new_file("/dev/stdout", stdout, 'w', 'f')->is_std_file = 1;
   TT.zstdout = TT.zfiles;
   new_file("/dev/stderr", stderr, 'w', 'f')->is_std_file = 1;
-  seed_jkiss32(123);
+  seedrand(123);
   int status = -1, r = 0;
   if (TT.cgl.first_begin) r = interp(TT.cgl.first_begin, &status);
   if (r != tkexit)
