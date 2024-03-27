@@ -1026,7 +1026,6 @@ static void gsub(int opcode, int nargs, int parmbase)
   val_to_str(repl);
   val_to_str(v);
 
-#define MKINT(x) ((int)(x))    // coerce to integer
 #define SLEN(zvalp) ((zvalp)->vst->size)
   char *p, *rp0 = repl->vst->str, *rp = rp0, *s = v->vst->str;
   int namps = 0, nhits = 0, is_sub = (opcode == tksub), eflags = 0;
@@ -1915,7 +1914,7 @@ static void insert_argv_map(struct zvalue *map, int key, char *value)
 }
 
 static void init_globals(int optind, int argc, char **argv, char *sepstring,
-    struct arg_list *assign_args, char **envp)
+    struct arg_list *assign_args)
 {
   // Global variables reside at the bottom of the TT.stack. Start with the awk
   // "special variables":  ARGC, ARGV, CONVFMT, ENVIRON, FILENAME, FNR, FS, NF,
@@ -1926,7 +1925,7 @@ static void init_globals(int optind, int argc, char **argv, char *sepstring,
   struct zvalue m = ZVINIT(ZF_MAP, 0, 0);
   zvalue_map_init(&m);
   STACK[ENVIRON] = m;
-  for (char **pkey = envp; *pkey; pkey++) {
+  for (char **pkey = environ; *pkey; pkey++) {
     char *pval = strchr(*pkey, '=');
     if (!pval) continue;
     struct zvalue zkey = ZVINIT(ZF_STR, 0, new_zstring(*pkey, pval - *pkey));
@@ -2022,10 +2021,10 @@ static void free_literal_regex(void)
 }
 
 EXTERN void run(int optind, int argc, char **argv, char *sepstring,
-    struct arg_list *assign_args, char **envp)
+    struct arg_list *assign_args)
 {
   char *printf_fmt_rx = "%[-+ #0']*([*]|[0-9]*)([.]([*]|[0-9]*))?[aAdiouxXfFeEgGcs%]";
-  init_globals(optind, argc, argv, sepstring, assign_args, envp);
+  init_globals(optind, argc, argv, sepstring, assign_args);
   TT.cfile = xzalloc(sizeof(struct zfile));
   rx_compile(&TT.rx_default, "[ \t\n]+");
   rx_compile(&TT.rx_last, "[ \t\n]+");

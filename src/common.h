@@ -27,6 +27,7 @@
 #if defined(__unix__) || defined(linux)
 #include <langinfo.h>
 #endif
+extern char **environ;    // needed outside toybox with gcc ?
 
 // __USE_MINGW_ANSI_STDIO will have MinGW use its own printf format system?
 // Because "The vc6.0 msvcrt.dll that MinGW-w64 targets doesn't implement
@@ -413,7 +414,7 @@ EXTERN void zmap_delete_map(struct zmap *m);
 EXTERN struct zmap_slot *zmap_find_or_insert_key(struct zmap *m, struct zstring *key);
 EXTERN void zmap_delete(struct zmap *m, struct zstring *key);
 EXTERN void run(int optind, int argc, char **argv, char *sepstring,
-    struct arg_list *assign_args, char **envp);
+    struct arg_list *assign_args);
 
 #endif // MONOLITHIC
 #undef EXTERN

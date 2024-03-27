@@ -35,9 +35,8 @@ static void progfiles_init(char *progstring, struct arg_list *prog_args)
 
 static int awk(char *sepstring, char *progstring, struct arg_list *prog_args,
     struct arg_list *assign_args, int optind, int argc, char **argv,
-    int opt_run_prog, char **envp, int opt_test_scanner, int opt_dump_symbols)
+    int opt_run_prog)
 {
-(void)opt_test_scanner, (void)opt_dump_symbols;
   struct scanner_state ss = {0};
   TT.scs = &ss;
 
@@ -48,7 +47,7 @@ static int awk(char *sepstring, char *progstring, struct arg_list *prog_args,
     error_exit("%d syntax error(s)", TT.cgl.compile_error_count);
   else {
     if (opt_run_prog)
-      run(optind, argc, argv, sepstring, assign_args, envp);
+      run(optind, argc, argv, sepstring, assign_args);
   }
 
   return TT.cgl.compile_error_count;
@@ -71,7 +70,7 @@ static void free_args(struct arg_list *p)
   }
 }
 
-int main(int argc, char **argv, char **envp)
+int main(int argc, char **argv)
 {
   char *usage = {
     "Usage:\n"
@@ -89,8 +88,6 @@ int main(int argc, char **argv, char **envp)
   char *sepstring = " ";
   // FIXME Need check on these, or use dynamic mem.
   char *progstring = 0;
-  int opt_test_scanner = 0;
-  int opt_dump_symbols = 0;
   int opt_run_prog = 1;
   int opt;
   int retval;
@@ -143,8 +140,8 @@ int main(int argc, char **argv, char **envp)
   }
 #endif
 
-  retval = awk(sepstring, progstring, prog_args, assign_args, optind, argc, argv,
-      opt_run_prog, envp, opt_test_scanner, opt_dump_symbols);
+  retval = awk(sepstring, progstring, prog_args, assign_args, optind,
+       argc, argv, opt_run_prog);
   free_args(assign_args);
   free_args(prog_args);
   return retval;

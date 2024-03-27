@@ -24,6 +24,7 @@
 #if defined(__unix__) || defined(linux)
 #include <langinfo.h>
 #endif
+extern char **environ;    // needed outside toybox with gcc ?
 
 // __USE_MINGW_ANSI_STDIO will have MinGW use its own printf format system?
 // Because "The vc6.0 msvcrt.dll that MinGW-w64 targets doesn't implement
@@ -3603,7 +3604,6 @@ static void gsub(int opcode, int nargs, int parmbase)
   val_to_str(repl);
   val_to_str(v);
 
-#define MKINT(x) ((int)(x))    // coerce to integer
 #define SLEN(zvalp) ((zvalp)->vst->size)
   char *p, *rp0 = repl->vst->str, *rp = rp0, *s = v->vst->str;
   int namps = 0, nhits = 0, is_sub = (opcode == tksub), eflags = 0;
@@ -4492,7 +4492,7 @@ static void insert_argv_map(struct zvalue *map, int key, char *value)
 }
 
 static void init_globals(int optind, int argc, char **argv, char *sepstring,
-    struct arg_list *assign_args, char **envp)
+    struct arg_list *assign_args)
 {
   // Global variables reside at the bottom of the TT.stack. Start with the awk
   // "special variables":  ARGC, ARGV, CONVFMT, ENVIRON, FILENAME, FNR, FS, NF,
@@ -4503,7 +4503,7 @@ static void init_globals(int optind, int argc, char **argv, char *sepstring,
   struct zvalue m = ZVINIT(ZF_MAP, 0, 0);
   zvalue_map_init(&m);
   STACK[ENVIRON] = m;
-  for (char **pkey = envp; *pkey; pkey++) {
+  for (char **pkey = environ; *pkey; pkey++) {
     char *pval = strchr(*pkey, '=');
     if (!pval) continue;
     struct zvalue zkey = ZVINIT(ZF_STR, 0, new_zstring(*pkey, pval - *pkey));
@@ -4599,10 +4599,10 @@ static void free_literal_regex(void)
 }
 
 static void run(int optind, int argc, char **argv, char *sepstring,
-    struct arg_list *assign_args, char **envp)
+    struct arg_list *assign_args)
 {
   char *printf_fmt_rx = "%[-+ #0']*([*]|[0-9]*)([.]([*]|[0-9]*))?[aAdiouxXfFeEgGcs%]";
-  init_globals(optind, argc, argv, sepstring, assign_args, envp);
+  init_globals(optind, argc, argv, sepstring, assign_args);
   TT.cfile = xzalloc(sizeof(struct zfile));
   rx_compile(&TT.rx_default, "[ \t\n]+");
   rx_compile(&TT.rx_last, "[ \t\n]+");
@@ -4656,9 +4656,8 @@ static void progfiles_init(char *progstring, struct arg_list *prog_args)
 
 static int awk(char *sepstring, char *progstring, struct arg_list *prog_args,
     struct arg_list *assign_args, int optind, int argc, char **argv,
-    int opt_run_prog, char **envp, int opt_test_scanner, int opt_dump_symbols)
+    int opt_run_prog)
 {
-(void)opt_test_scanner, (void)opt_dump_symbols;
   struct scanner_state ss = {0};
   TT.scs = &ss;
 
@@ -4669,7 +4668,7 @@ static int awk(char *sepstring, char *progstring, struct arg_list *prog_args,
     error_exit("%d syntax error(s)", TT.cgl.compile_error_count);
   else {
     if (opt_run_prog)
-      run(optind, argc, argv, sepstring, assign_args, envp);
+      run(optind, argc, argv, sepstring, assign_args);
   }
 
   return TT.cgl.compile_error_count;
@@ -4692,7 +4691,7 @@ static void free_args(struct arg_list *p)
   }
 }
 
-int main(int argc, char **argv, char **envp)
+int main(int argc, char **argv)
 {
   char *usage = {
     "Usage:\n"
@@ -4710,8 +4709,6 @@ int main(int argc, char **argv, char **envp)
   char *sepstring = " ";
   // FIXME Need check on these, or use dynamic mem.
   char *progstring = 0;
-  int opt_test_scanner = 0;
-  int opt_dump_symbols = 0;
   int opt_run_prog = 1;
   int opt;
   int retval;
@@ -4764,8 +4761,8 @@ int main(int argc, char **argv, char **envp)
   }
 #endif
 
-  retval = awk(sepstring, progstring, prog_args, assign_args, optind, argc, argv,
-      opt_run_prog, envp, opt_test_scanner, opt_dump_symbols);
+  retval = awk(sepstring, progstring, prog_args, assign_args, optind,
+       argc, argv, opt_run_prog);
   free_args(assign_args);
   free_args(prog_args);
   return retval;
