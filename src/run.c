@@ -16,7 +16,6 @@ static void check_numeric_string(struct zvalue *v)
     // Significant speed gain with this test:
     // num string must begin space, +, -, ., or digit.
     if (strchr("+-.1234567890 ", *s)) {
-      setlocale(LC_NUMERIC, "");
       double num = strtod(s, &end);
       if (s == end || end[strspn(end, " ")]) return;
       v->num = num;

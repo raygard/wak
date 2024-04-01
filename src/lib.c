@@ -95,7 +95,6 @@ EXTERN char *xstrdup(char *s)
 #endif  // FOR_TOYBOX
 EXTERN double str_to_num(char *s)
 {
-  setlocale(LC_NUMERIC, "");
   return atof(s);
 }
 
