@@ -342,7 +342,8 @@ static void check_builtin_arg_counts(int tk, int num_args, char *fname)
 {
   static char builtin_1_arg[] = { tkcos, tksin, tkexp, tklog, tksqrt, tkint,
                                   tktolower, tktoupper, tkclose, tksystem, 0};
-  static char builtin_2_arg[] = { tkatan2, tkmatch, tkindex, 0};
+  static char builtin_2_arg[] = { tkatan2, tkmatch, tkindex, tklshift, tkrshift, 0};
+  static char builtin_al_2_arg[] = { tkband, tkbor, tkbxor, 0};
   static char builtin_2_3_arg[] = { tksub, tkgsub, tksplit, tksubstr, 0};
   static char builtin_0_1_arg[] = { tksrand, tklength, tkfflush, 0};
 
@@ -352,6 +353,8 @@ static void check_builtin_arg_counts(int tk, int num_args, char *fname)
     XERR("function '%s' expected 1 arg, got %d\n", fname, num_args);
   else if (strchr(builtin_2_arg, tk) && num_args != 2)
     XERR("function '%s' expected 2 args, got %d\n", fname, num_args);
+  else if (strchr(builtin_al_2_arg, tk) && num_args < 2)
+    XERR("function '%s' expected at least 2 args, got %d\n", fname, num_args);
   else if (strchr(builtin_2_3_arg, tk) && num_args != 2 && num_args != 3)
     XERR("function '%s' expected 2 or 3 args, got %d\n", fname, num_args);
   else if (strchr(builtin_0_1_arg, tk) && num_args != 0 && num_args != 1)
@@ -559,7 +562,7 @@ static void field_op(void)
 static char exprstartsy[] = {tkvar, tknumber, tkstring, tkregex, tkfunc,
   tkbuiltin, tkfield, tkminus, tkplus, tknot, tkincr, tkdecr, tklparen,
   tkgetline, tkclose, tkindex, tkmatch, tksplit, tksub, tkgsub, tksprintf,
-  tksubstr, 0};
+  tksubstr, tkband, tkbor, tkbxor, tkrshift, tklshift, 0};
 
 // Tokens that can end statement
 static char stmtendsy[] = {tknl, tksemi, tkrbrace, 0};

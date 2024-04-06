@@ -229,9 +229,11 @@ enum tokens {
 
 // static char *builtins = " atan2     cos       sin       exp       "
 //    "log       sqrt      int       rand      srand     length    "
-//    "tolower   toupper   system    fflush    ";
+//    "tolower   toupper   system    fflush    "
+//    "and       or        xor       lshift    rshift    ";
     tkatan2, tkcos, tksin, tkexp, tklog, tksqrt, tkint, tkrand, tksrand,
     tklength, tktolower, tktoupper, tksystem, tkfflush,
+    tkband, tkbor, tkbxor, tklshift, tkrshift,
 
 // static char *specialfuncs = " close     index     match     split     "
 //    "sub       gsub      sprintf   substr    ";

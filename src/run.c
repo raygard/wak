@@ -1789,6 +1789,24 @@ static int interpx(int start, int *status)
         push_int_val(offs);
         break;
 
+      case tkband:
+      case tkbor:
+      case tkbxor:
+      case tklshift:
+      case tkrshift:
+        ; size_t acc = val_to_num(STKP);
+        nargs = *ip++;
+        for (int i = 1; i < nargs; i++) switch (opcode) {
+          case tkband: acc &= (size_t)val_to_num(STKP-i); break;
+          case tkbor:  acc |= (size_t)val_to_num(STKP-i); break;
+          case tkbxor: acc ^= (size_t)val_to_num(STKP-i); break;
+          case tklshift: acc = (size_t)val_to_num(STKP-i) << acc; break;
+          case tkrshift: acc = (size_t)val_to_num(STKP-i) >> acc; break;
+        }
+        drop_n(nargs);
+        push_int_val(acc);
+        break;
+
       case tktolower:
       case tktoupper:
         nargs = *ip++;

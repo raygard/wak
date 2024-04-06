@@ -25,6 +25,7 @@ EXTERN char *keywords = " in        BEGIN     END       if        else      "
 EXTERN char *builtins = " atan2     cos       sin       exp       log       "
     "sqrt      int       rand      srand     length    "
     "tolower   toupper   system    fflush    "
+    "and       or        xor       lshift    rshift    "
     "close     index     match     split     "
     "sub       gsub      sprintf   substr    ";
 
