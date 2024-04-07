@@ -422,6 +422,17 @@ testcmd "tolower()" "'BEGIN{print tolower(\"abABcD\")}'" "ababcd\n" "" ""
 testcmd "substr()" "'BEGIN{print substr(\"abac\", 2, 2)}'" "ba\n" "" ""
 testcmd "atan2()" "'BEGIN{print substr(atan2(0, -1), 1, 5)}'" "3.141\n" "" ""
 testcmd "length()" "'{print length()}'" "1\n2\n0\n4\n" "" "a\n12\n\n6502"
+[ -n "$TEST_HOST" ] &&\
+  export LOCALE=en_US.UTF-8 LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8
+testcmd "length() utf8" "'{print length()}'< $FILES/utf8/japan.txt" "25\n" "" ""
+testcmd "substr() utf8" "'{print substr(\$0,2,1)}' < $FILES/utf8/arabic.txt" "ل\nأ\n" "" "" 
+testcmd "index() utf8" "'{print index(\$0, \"ス\")}' < $FILES/utf8/japan.txt"\
+  "5\n" "" ""
+testcmd "index() none" "'BEGIN{print index(\"ス\", \"deadbeef\")}'" "0\n" "" ""
+testcmd "match()" "'BEGIN{print match(\"bcdab\", \"ab\")}'" "4\n" "" ""
+testcmd "match() none" "'BEGIN{print match(\"ス\", \"deadbeef\")}'" "0\n" "" ""
+testcmd "match() utf8" "'{print match(\$0, \"ス\")}' < $FILES/utf8/japan.txt"\
+  "5\n" "" ""
 
 testing "awk -e print print ARGC file1 file2" "awk '{ print \$1; print ARGC }' testfile1.txt testfile2.txt" "abc\n3\nghi\n3\nmno\n3\nstu\n3\n\n3\nabc,def,ghi,5\n3\nghi,jkl,mno,10\n3\nmno,pqr,stu,15\n3\nstu,vwx,abc,20\n3\n\n3\n" "" ""
 testing "awk -e print ARGC file" "awk '{ print ARGC }' testfile1.txt" "2\n2\n2\n2\n2\n" "$FILE1" ""
