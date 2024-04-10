@@ -434,6 +434,7 @@ testcmd "match()" "'BEGIN{print match(\"bcdab\", \"ab\")}'" "4\n" "" ""
 testcmd "match() none" "'BEGIN{print match(\"ス\", \"deadbeef\")}'" "0\n" "" ""
 testcmd "match() utf8" "'{print match(\$0, \"ス\")}' < $FILES/utf8/japan.txt"\
   "5\n" "" ""
+testcmd "\\u" "'BEGIN{print \"\\u20\u255\"}' < /dev/null" " ɕ\n" "" ""
 
 testcmd "-b" "-b '{print length()}'< $FILES/utf8/japan.txt" "75\n" "" ""
 
