@@ -342,6 +342,11 @@ ssize_t getdelim(char ** restrict lineptr, size_t * restrict n, int delimiter, F
 
 // Common (global) data
 static struct global_data TT;
+struct optflags {
+  char FLAG_b;
+};
+static struct optflags optflags;
+#define FLAG(x) (optflags.FLAG_##x)
 #endif  // FOR_TOYBOX
 
 // Forward ref declarations
@@ -504,6 +509,7 @@ static int hexval(int c)
 
 // Global data
 static struct global_data TT;
+static struct optflags optflags;
 #endif  // FOR_TOYBOX
 
 // These (ops, keywords, builtins) must align with enum tokens
@@ -557,7 +563,8 @@ static unsigned *strtowc(char *str, size_t len, int *newlen)
 {
   size_t ai = 0, ui = 0;
   unsigned *ret = xzalloc(sizeof(int) * len);
-  while (ai < len) {
+  while (ai < len) if (FLAG(b)) ret[ui++] = str[ai++];
+  else {
     int isvalid = utf8towc(ret+(ui++), str+ai, len-ai);
     if (!isvalid) ai++; // Null byte
     else if (isvalid < 0) ret[ui] = '?', ai+=(+isvalid);
@@ -4738,6 +4745,7 @@ int main(int argc, char **argv)
       "               [-v assignment]...  [argument...]\n"
       "also:\n"
       "-V show version\n"
+      "-b use bytes, not characters\n"
       "-c compile only, do not run\n"
   };
   char pbuf[PBUFSIZE];
@@ -4753,10 +4761,13 @@ int main(int argc, char **argv)
   struct arg_list *prog_args = 0, **tail_prog_args = &prog_args;
   struct arg_list *assign_args = 0, **tail_assign_args = &assign_args;
 
-  while ((opt = getopt(argc, argv, "F:f:v:Vc")) != -1) {
+  while ((opt = getopt(argc, argv, "F:f:v:Vbc")) != -1) {
     switch (opt) {
       case 'F':
         sepstring = escape_str(optarg, 0);
+        break;
+      case 'b':
+        optflags.FLAG_b = 1;
         break;
       case 'f':
         tail_prog_args = new_arg(tail_prog_args, optarg);

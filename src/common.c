@@ -12,6 +12,7 @@
 
 // Global data
 EXTERN struct global_data TT;
+EXTERN struct optflags optflags;
 #endif  // FOR_TOYBOX
 
 // These (ops, keywords, builtins) must align with enum tokens
@@ -65,7 +66,8 @@ EXTERN unsigned *strtowc(char *str, size_t len, int *newlen)
 {
   size_t ai = 0, ui = 0;
   unsigned *ret = xzalloc(sizeof(int) * len);
-  while (ai < len) {
+  while (ai < len) if (FLAG(b)) ret[ui++] = str[ai++];
+  else {
     int isvalid = utf8towc(ret+(ui++), str+ai, len-ai);
     if (!isvalid) ai++; // Null byte
     else if (isvalid < 0) ret[ui] = '?', ai+=(+isvalid);

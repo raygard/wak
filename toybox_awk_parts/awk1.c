@@ -5,7 +5,7 @@
  *
  * See https://pubs.opengroup.org/onlinepubs/9699919799/utilities/awk.html
 
-USE_AWK(NEWTOY(awk, "F:v*f*c", TOYFLAG_USR|TOYFLAG_BIN))
+USE_AWK(NEWTOY(awk, "F:v*f*bc", TOYFLAG_USR|TOYFLAG_BIN))
 
 config AWK
   bool "awk"
@@ -16,6 +16,7 @@ config AWK
             awk [-F sepstring] -f progfile [-f progfile]... [-v assignment]...
                   [argument...]
       also:
+      -b : use bytes, not characters
       -c : compile only, do not run
 */
 
