@@ -358,7 +358,7 @@ EXTERN struct global_data TT;
 EXTERN struct zvalue *val_to_str(struct zvalue *v);
 
 #ifndef MONOLITHIC
-EXTERN char *escape_str(char *s);
+EXTERN char *escape_str(char *s, int is_regex);
 EXTERN char *progname;
 EXTERN struct zvalue uninit_zvalue;
 EXTERN struct zvalue uninit_string_zvalue;
@@ -383,7 +383,6 @@ EXTERN void *xzalloc(size_t size);
 EXTERN char *xstrdup(char *s);
 EXTERN double str_to_num(char *s);
 EXTERN int hexval(int c);
-EXTERN char *rx_escape_str(char *s);
 EXTERN struct zlist *zlist_initx(struct zlist *p, size_t size, size_t count);
 EXTERN struct zlist *zlist_init(struct zlist *p, size_t size);
 EXTERN void zlist_expand(struct zlist *p);
@@ -392,7 +391,6 @@ EXTERN int zlist_len(struct zlist *p);
 EXTERN void get_token_text(char *op, int tk);
 EXTERN void zstring_release(struct zstring **s);
 EXTERN void zstring_incr_refcnt(struct zstring *s);
-EXTERN struct zstring *new_zstring_cap(int capacity);
 EXTERN struct zstring *zstring_update(struct zstring *to, size_t at, char *s, size_t n);
 EXTERN struct zstring *zstring_copy(struct zstring *to, struct zstring *from);
 EXTERN struct zstring *zstring_extend(struct zstring *to, struct zstring *from);

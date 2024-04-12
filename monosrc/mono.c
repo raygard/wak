@@ -2615,15 +2615,16 @@ static struct zstring *num_to_zstring(double n, char *fmt)
 //// regex routines
 ////////////////////
 
-static char *rx_escape_str(char *s)
+static char *escape_str(char *s, int is_regex)
 {
-  char *p, *escapes = "abfnrtv\"/"; // FIXME TODO should / be in there?
+  char *p, *escapes = is_regex ? "abfnrtv\"/" : "\\abfnrtv\"/";
+  // FIXME TODO should / be in there?
   char *s0 = s, *to = s;
   while ((*to = *s)) {
     if (*s != '\\') { to++, s++;
     } else if ((p = strchr(escapes, *++s))) {
       // checking char after \ for known escapes
-      int c = "\a\b\f\n\r\t\v\"/"[p-escapes];
+      int c = (is_regex?"\a\b\f\n\r\t\v\"/":"\\\a\b\f\n\r\t\v\"/")[p-escapes];
       if (c) *to = c, s++;  // else final backslash
       to++;
     } else if ('0' <= *s && *s <= '9') {
@@ -2637,7 +2638,10 @@ static char *rx_escape_str(char *s)
         if (isxdigit(s[1])) c = c * 16 + hexval(*++s);
         *to++ = c, s++;
       }
-    } else *to++ = '\\', *to++ = *s++;
+    } else {
+      if (is_regex) *to++ = '\\';
+      *to++ = *s++;
+    }
   }
   return s0;
 }
@@ -2648,7 +2652,7 @@ static void rx_zvalue_compile(regex_t **rx, struct zvalue *pat)
   else {
     val_to_str(pat);
     zvalue_dup_zstring(pat);
-    rx_escape_str(pat->vst->str);
+    escape_str(pat->vst->str, 1);
     xregcomp(*rx, pat->vst->str, REG_EXTENDED);
   }
 }
@@ -3318,33 +3322,6 @@ static void varprint(int(*fpvar)(FILE *, const char *, ...), FILE *outfp, int na
   }
 }
 
-static char *escape_str(char *s)
-{
-  char *p, *escapes = "\\abfnrtv\"/"; // FIXME TODO should / be in there?
-  char *s0 = s, *to = s;
-  while ((*to = *s)) {
-    if (*s != '\\') to++, s++;
-    else if ((p = strchr(escapes, *++s))) {
-      // checking char after \ for known escapes
-      int c = "\\\a\b\f\n\r\t\v\"/"[p-escapes];
-      if (c) *to = c, s++;  // else final backslash
-      to++;
-    } else if ('0' <= *s && *s <= '9') {
-      int k, c = *s++ - '0';
-      for (k = 0; k < 2 && '0' <= *s && *s <= '9'; k++)
-        c = c * 8 + *s++ - '0';
-      *to++ = c;
-    } else if (*s == 'x') {
-      if (isxdigit(s[1])) {
-        int c = hexval(*++s);
-        if (isxdigit(s[1])) c = c * 16 + hexval(*++s);
-        *to++ = c, s++;
-      }
-    } else *to++ = *s++;
-  }
-  return s0;
-}
-
 static int is_ok_varname(char *v)
 {
   char *ok = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_";
@@ -3376,7 +3353,7 @@ static int assign_global(char *var, char *value)
 
     zvalue_release_zstring(v);
     value = xstrdup(value);
-    *v = new_str_val(escape_str(value));
+    *v = new_str_val(escape_str(value, 0));
     xfree(value);
     check_numeric_string(v);
     return 1;
@@ -4693,7 +4670,7 @@ int main(int argc, char **argv)
   while ((opt = getopt(argc, argv, "F:f:v:Vc")) != -1) {
     switch (opt) {
       case 'F':
-        sepstring = escape_str(optarg);
+        sepstring = escape_str(optarg, 0);
         break;
       case 'f':
         tail_prog_args = new_arg(tail_prog_args, optarg);

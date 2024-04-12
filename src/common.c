@@ -126,13 +126,6 @@ EXTERN void zstring_incr_refcnt(struct zstring *s)
   if (s) s->refcnt++;
 }
 
-EXTERN struct zstring *new_zstring_cap(int capacity)
-{
-  struct zstring *z = xzalloc(sizeof(*z) + capacity);
-  z->capacity = capacity;
-  return z;
-}
-
 // !! Use only if 'to' is NULL or its refcnt is 0.
 static struct zstring *zstring_modify(struct zstring *to, size_t at, char *s, size_t n)
 {

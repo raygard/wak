@@ -1,6 +1,6 @@
 void awk_main(void)
 {
-  char *sepstring = TT.F ? escape_str(TT.F) : " ";
+  char *sepstring = TT.F ? escape_str(TT.F, 0) : " ";
   int optind = 0;
   char *progstring = NULL;
 

@@ -85,7 +85,7 @@ int main(int argc, char **argv)
   while ((opt = getopt(argc, argv, "F:f:v:Vc")) != -1) {
     switch (opt) {
       case 'F':
-        sepstring = escape_str(optarg);
+        sepstring = escape_str(optarg, 0);
         break;
       case 'f':
         tail_prog_args = new_arg(tail_prog_args, optarg);
