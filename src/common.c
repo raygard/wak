@@ -62,26 +62,30 @@ EXTERN void get_token_text(char *op, int tk)
 /// UTF-8
 ////////////////////
 
-EXTERN unsigned *strtowc(char *str, size_t len, int *newlen)
+// Return number of bytes in 'cnt' utf8 codepoints
+EXTERN int bytesinutf8(char *str, size_t len, size_t cnt)
 {
-  size_t ai = 0, ui = 0;
-  unsigned *ret = xzalloc(sizeof(int) * len);
-  while (ai < len) if (FLAG(b)) ret[ui++] = str[ai++];
-  else {
-    int isvalid = utf8towc(ret+(ui++), str+ai, len-ai);
-    if (!isvalid) ai++; // Null byte
-    else if (isvalid < 0) ret[ui] = '?', ai+=(+isvalid);
-    else ai += isvalid;
+  unsigned wch;
+  char *lim = str + len, *s0 = str;
+  while (cnt-- && str < lim) {
+    int r = utf8towc(&wch, str, lim - str);
+    str += r > 0 ? r : 1;
   }
-  *newlen = ui;
-  return ret;
+  return str - s0;
 }
 
-EXTERN size_t wctostr(unsigned *old, char *ret, size_t len)
+// Return number of utf8 codepoints in str
+EXTERN int utf8cnt(char *str, size_t len)
 {
-  size_t ai = 0, ui = 0;
-  while (ui < len) ai += wctoutf8(ret+ai, old[ui++]);
-  return ai;
+  unsigned wch;
+  int cnt = 0;
+  char *lim;
+  if (!len || FLAG(b)) return len;
+  for (lim = str + len; str < lim; cnt++) {
+    int r = utf8towc(&wch, str, lim - str);
+    str += r > 0 ? r : 1;
+  }
+  return cnt;
 }
 
 ////////////////////

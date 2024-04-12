@@ -385,8 +385,8 @@ EXTERN int regexec0(regex_t *preg, char *string, long len, int nmatch,
 EXTERN int wctoutf8(char *s, unsigned wc);
 EXTERN int utf8towc(unsigned *wc, char *str, unsigned len);
 
-EXTERN unsigned *strtowc(char *str, size_t len, int *ui);
-EXTERN size_t   wctostr(unsigned *old, char *ret, size_t len);
+EXTERN int bytesinutf8(char *str, size_t len, size_t cnt);
+EXTERN int utf8cnt(char *str, size_t len);
 
 EXTERN void error_exit(char *format, ...);
 EXTERN void xfree(void *p);
