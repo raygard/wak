@@ -92,6 +92,56 @@ EXTERN char *xstrdup(char *s)
   return p;
 }
 
+// Convert wc to utf8, returning bytes written. Does not null terminate.
+EXTERN int wctoutf8(char *s, unsigned wc)
+{
+  int len = (wc>0x7ff)+(wc>0xffff), i;
+
+  if (wc<128) {
+    *s = wc;
+    return 1;
+  } else {
+    i = len;
+    do {
+      s[1+i] = 0x80+(wc&0x3f);
+      wc >>= 6;
+    } while (i--);
+    *s = (((signed char) 0x80) >> (len+1)) | wc;
+  }
+
+  return 2+len;
+}
+
+// Convert utf8 sequence to a unicode wide character
+// returns bytes consumed, or -1 if err, or -2 if need more data.
+EXTERN int utf8towc(unsigned *wc, char *str, unsigned len)
+{
+  unsigned result, mask, first;
+  char *s, c;
+
+  // fast path ASCII
+  if (len && *str<128) return !!(*wc = *str);
+
+  result = first = *(s = str++);
+  if (result<0xc2 || result>0xf4) return -1;
+  for (mask = 6; (first&0xc0)==0xc0; mask += 5, first <<= 1) {
+    if (!--len) return -2;
+    if (((c = *(str++))&0xc0) != 0x80) return -1;
+    result = (result<<6)|(c&0x3f);
+  }
+  result &= (1<<mask)-1;
+  c = str-s;
+
+  // Avoid overlong encodings
+  if (result<(unsigned []){0x80,0x800,0x10000}[c-2]) return -1;
+
+  // Limit unicode so it can't encode anything UTF-16 can't.
+  if (result>0x10ffff || (result>=0xd800 && result<=0xdfff)) return -1;
+  *wc = result;
+
+  return str-s;
+}
+
 #endif  // FOR_TOYBOX
 EXTERN double str_to_num(char *s)
 {

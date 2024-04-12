@@ -58,6 +58,31 @@ EXTERN void get_token_text(char *op, int tk)
 }
 
 ////////////////////
+/// UTF-8
+////////////////////
+
+EXTERN unsigned *strtowc(char *str, size_t len, int *newlen)
+{
+  size_t ai = 0, ui = 0;
+  unsigned *ret = xzalloc(sizeof(int) * len);
+  while (ai < len) {
+    int isvalid = utf8towc(ret+(ui++), str+ai, len-ai);
+    if (!isvalid) ai++; // Null byte
+    else if (isvalid < 0) ret[ui] = '?', ai+=(+isvalid);
+    else ai += isvalid;
+  }
+  *newlen = ui;
+  return ret;
+}
+
+EXTERN size_t wctostr(unsigned *old, char *ret, size_t len)
+{
+  size_t ai = 0, ui = 0;
+  while (ui < len) ai += wctoutf8(ret+ai, old[ui++]);
+  return ai;
+}
+
+////////////////////
 ////   zlist
 ////////////////////
 

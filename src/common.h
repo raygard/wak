@@ -19,6 +19,8 @@
 #include <math.h>
 #include <time.h>
 #include <locale.h>
+#include <wchar.h>
+#include <wctype.h>
 #include <assert.h>
 
 // for getopt():
@@ -375,6 +377,12 @@ EXTERN void zzerr(char *format, ...);
 EXTERN void xregcomp(regex_t *preg, char *regex, int cflags);
 EXTERN int regexec0(regex_t *preg, char *string, long len, int nmatch,
   regmatch_t *pmatch, int eflags);
+EXTERN int wctoutf8(char *s, unsigned wc);
+EXTERN int utf8towc(unsigned *wc, char *str, unsigned len);
+
+EXTERN unsigned *strtowc(char *str, size_t len, int *ui);
+EXTERN size_t   wctostr(unsigned *old, char *ret, size_t len);
+
 EXTERN void error_exit(char *format, ...);
 EXTERN void xfree(void *p);
 EXTERN void *xmalloc(size_t size);
