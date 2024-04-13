@@ -191,6 +191,19 @@ static void get_string_or_regex(int endchar)
           }
           append_this_char(c);
         } else append_this_char('x');
+      } else if (TT.scs->ch == 'u') {
+        gch();
+        if (isxdigit(TT.scs->ch)) {
+          int i = 0, j = 0, c = 0;
+          char codep[9] = {0};
+          do {
+            codep[j++] = TT.scs->ch;
+            gch();
+          } while (j < 8 && isxdigit(TT.scs->ch));
+          c = strtol(codep, 0, 16);
+          for (i = wctoutf8(codep, c), j = 0; j < i; j++)
+            append_this_char(codep[j]);
+        } else append_this_char('u');
       } else if (isdigit(TT.scs->ch)) {
         if (TT.scs->ch < '8') {
           int k, c = 0;
