@@ -12,6 +12,7 @@
 
 // Global data
 EXTERN struct global_data TT;
+EXTERN struct optflags optflags;
 #endif  // FOR_TOYBOX
 
 // These (ops, keywords, builtins) must align with enum tokens
@@ -55,6 +56,36 @@ EXTERN void get_token_text(char *op, int tk)
   // This MUST ? be changed if ops string or tk... assignments change!
   memmove(op, ops + 3 * (tk - tksemi) + 1, 2);
   op[ op[1] == ' ' ? 1 : 2 ] = 0;
+}
+
+////////////////////
+/// UTF-8
+////////////////////
+
+// Return number of bytes in 'cnt' utf8 codepoints
+EXTERN int bytesinutf8(char *str, size_t len, size_t cnt)
+{
+  unsigned wch;
+  char *lim = str + len, *s0 = str;
+  while (cnt-- && str < lim) {
+    int r = utf8towc(&wch, str, lim - str);
+    str += r > 0 ? r : 1;
+  }
+  return str - s0;
+}
+
+// Return number of utf8 codepoints in str
+EXTERN int utf8cnt(char *str, size_t len)
+{
+  unsigned wch;
+  int cnt = 0;
+  char *lim;
+  if (!len || FLAG(b)) return len;
+  for (lim = str + len; str < lim; cnt++) {
+    int r = utf8towc(&wch, str, lim - str);
+    str += r > 0 ? r : 1;
+  }
+  return cnt;
 }
 
 ////////////////////
@@ -124,13 +155,6 @@ EXTERN void zstring_release(struct zstring **s)
 EXTERN void zstring_incr_refcnt(struct zstring *s)
 {
   if (s) s->refcnt++;
-}
-
-EXTERN struct zstring *new_zstring_cap(int capacity)
-{
-  struct zstring *z = xzalloc(sizeof(*z) + capacity);
-  z->capacity = capacity;
-  return z;
 }
 
 // !! Use only if 'to' is NULL or its refcnt is 0.

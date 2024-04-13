@@ -19,6 +19,8 @@
 #include <math.h>
 #include <time.h>
 #include <locale.h>
+#include <wchar.h>
+#include <wctype.h>
 #include <assert.h>
 
 // for getopt():
@@ -352,13 +354,18 @@ ssize_t getdelim(char ** restrict lineptr, size_t * restrict n, int delimiter, F
 
 // Common (global) data
 EXTERN struct global_data TT;
+struct optflags {
+  char FLAG_b;
+};
+EXTERN struct optflags optflags;
+#define FLAG(x) (optflags.FLAG_##x)
 #endif  // FOR_TOYBOX
 
 // Forward ref declarations
 EXTERN struct zvalue *val_to_str(struct zvalue *v);
 
 #ifndef MONOLITHIC
-EXTERN char *escape_str(char *s);
+EXTERN char *escape_str(char *s, int is_regex);
 EXTERN char *progname;
 EXTERN struct zvalue uninit_zvalue;
 EXTERN struct zvalue uninit_string_zvalue;
@@ -375,6 +382,12 @@ EXTERN void zzerr(char *format, ...);
 EXTERN void xregcomp(regex_t *preg, char *regex, int cflags);
 EXTERN int regexec0(regex_t *preg, char *string, long len, int nmatch,
   regmatch_t *pmatch, int eflags);
+EXTERN int wctoutf8(char *s, unsigned wc);
+EXTERN int utf8towc(unsigned *wc, char *str, unsigned len);
+
+EXTERN int bytesinutf8(char *str, size_t len, size_t cnt);
+EXTERN int utf8cnt(char *str, size_t len);
+
 EXTERN void error_exit(char *format, ...);
 EXTERN void xfree(void *p);
 EXTERN void *xmalloc(size_t size);
@@ -383,7 +396,6 @@ EXTERN void *xzalloc(size_t size);
 EXTERN char *xstrdup(char *s);
 EXTERN double str_to_num(char *s);
 EXTERN int hexval(int c);
-EXTERN char *rx_escape_str(char *s);
 EXTERN struct zlist *zlist_initx(struct zlist *p, size_t size, size_t count);
 EXTERN struct zlist *zlist_init(struct zlist *p, size_t size);
 EXTERN void zlist_expand(struct zlist *p);
@@ -392,7 +404,6 @@ EXTERN int zlist_len(struct zlist *p);
 EXTERN void get_token_text(char *op, int tk);
 EXTERN void zstring_release(struct zstring **s);
 EXTERN void zstring_incr_refcnt(struct zstring *s);
-EXTERN struct zstring *new_zstring_cap(int capacity);
 EXTERN struct zstring *zstring_update(struct zstring *to, size_t at, char *s, size_t n);
 EXTERN struct zstring *zstring_copy(struct zstring *to, struct zstring *from);
 EXTERN struct zstring *zstring_extend(struct zstring *to, struct zstring *from);

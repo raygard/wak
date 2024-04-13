@@ -67,6 +67,7 @@ int main(int argc, char **argv)
       "               [-v assignment]...  [argument...]\n"
       "also:\n"
       "-V show version\n"
+      "-b use bytes, not characters\n"
       "-c compile only, do not run\n"
   };
   char pbuf[PBUFSIZE];
@@ -82,10 +83,13 @@ int main(int argc, char **argv)
   struct arg_list *prog_args = 0, **tail_prog_args = &prog_args;
   struct arg_list *assign_args = 0, **tail_assign_args = &assign_args;
 
-  while ((opt = getopt(argc, argv, "F:f:v:Vc")) != -1) {
+  while ((opt = getopt(argc, argv, "F:f:v:Vbc")) != -1) {
     switch (opt) {
       case 'F':
-        sepstring = escape_str(optarg);
+        sepstring = escape_str(optarg, 0);
+        break;
+      case 'b':
+        optflags.FLAG_b = 1;
         break;
       case 'f':
         tail_prog_args = new_arg(tail_prog_args, optarg);
