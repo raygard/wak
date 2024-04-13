@@ -65,6 +65,7 @@ EXTERN void get_token_text(char *op, int tk)
 // Return number of bytes in 'cnt' utf8 codepoints
 EXTERN int bytesinutf8(char *str, size_t len, size_t cnt)
 {
+  if (FLAG(b)) return cnt;
   unsigned wch;
   char *lim = str + len, *s0 = str;
   while (cnt-- && str < lim) {

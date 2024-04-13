@@ -378,7 +378,7 @@ static void error_exit(char *format, ...)
 // Compile a regular expression into a regex_t
 static void xregcomp(regex_t *preg, char *regex, int cflags)
 {
-  // Borrowed from Rob Landley's toybox
+  // Copied from Rob Landley's toybox
   // Copyright 2006 Rob Landley <rob@landley.net>
   // License: 0BSD
   int rc;
@@ -400,7 +400,7 @@ static void xregcomp(regex_t *preg, char *regex, int cflags)
 static int regexec0(regex_t *preg, char *string, long len, int nmatch,
   regmatch_t *pmatch, int eflags)
 {
-  // Borrowed from Rob Landley's toybox
+  // Copied from Rob Landley's toybox
   // Copyright 2006 Rob Landley <rob@landley.net>
   // License: 0BSD
   regmatch_t backup;
@@ -409,6 +409,62 @@ static int regexec0(regex_t *preg, char *string, long len, int nmatch,
   pmatch->rm_so = 0;
   pmatch->rm_eo = len;
   return regexec(preg, string, nmatch, pmatch, eflags|REG_STARTEND);
+}
+
+// Convert wc to utf8, returning bytes written. Does not null terminate.
+static int wctoutf8(char *s, unsigned wc)
+{
+  // Copied from Rob Landley's toybox
+  // Copyright 2006 Rob Landley <rob@landley.net>
+  // License: 0BSD
+  int len = (wc>0x7ff)+(wc>0xffff), i;
+
+  if (wc<128) {
+    *s = wc;
+    return 1;
+  } else {
+    i = len;
+    do {
+      s[1+i] = 0x80+(wc&0x3f);
+      wc >>= 6;
+    } while (i--);
+    *s = (((signed char) 0x80) >> (len+1)) | wc;
+  }
+
+  return 2+len;
+}
+
+// Convert utf8 sequence to a unicode wide character
+// returns bytes consumed, or -1 if err, or -2 if need more data.
+static int utf8towc(unsigned *wc, char *str, unsigned len)
+{
+  // Copied from Rob Landley's toybox
+  // Copyright 2006 Rob Landley <rob@landley.net>
+  // License: 0BSD
+  unsigned result, mask, first;
+  char *s, c;
+
+  // fast path ASCII
+  if (len && *str<128) return !!(*wc = *str);
+
+  result = first = *(s = str++);
+  if (result<0xc2 || result>0xf4) return -1;
+  for (mask = 6; (first&0xc0)==0xc0; mask += 5, first <<= 1) {
+    if (!--len) return -2;
+    if (((c = *(str++))&0xc0) != 0x80) return -1;
+    result = (result<<6)|(c&0x3f);
+  }
+  result &= (1<<mask)-1;
+  c = str-s;
+
+  // Avoid overlong encodings
+  if (result<(unsigned []){0x80,0x800,0x10000}[c-2]) return -1;
+
+  // Limit unicode so it can't encode anything UTF-16 can't.
+  if (result>0x10ffff || (result>=0xd800 && result<=0xdfff)) return -1;
+  *wc = result;
+
+  return str-s;
 }
 
 static void *xmalloc(size_t size)
@@ -438,56 +494,6 @@ static char *xstrdup(char *s)
   char *p = xmalloc(n);
   memmove(p, s, n);
   return p;
-}
-
-// Convert wc to utf8, returning bytes written. Does not null terminate.
-static int wctoutf8(char *s, unsigned wc)
-{
-  int len = (wc>0x7ff)+(wc>0xffff), i;
-
-  if (wc<128) {
-    *s = wc;
-    return 1;
-  } else {
-    i = len;
-    do {
-      s[1+i] = 0x80+(wc&0x3f);
-      wc >>= 6;
-    } while (i--);
-    *s = (((signed char) 0x80) >> (len+1)) | wc;
-  }
-
-  return 2+len;
-}
-
-// Convert utf8 sequence to a unicode wide character
-// returns bytes consumed, or -1 if err, or -2 if need more data.
-static int utf8towc(unsigned *wc, char *str, unsigned len)
-{
-  unsigned result, mask, first;
-  char *s, c;
-
-  // fast path ASCII
-  if (len && *str<128) return !!(*wc = *str);
-
-  result = first = *(s = str++);
-  if (result<0xc2 || result>0xf4) return -1;
-  for (mask = 6; (first&0xc0)==0xc0; mask += 5, first <<= 1) {
-    if (!--len) return -2;
-    if (((c = *(str++))&0xc0) != 0x80) return -1;
-    result = (result<<6)|(c&0x3f);
-  }
-  result &= (1<<mask)-1;
-  c = str-s;
-
-  // Avoid overlong encodings
-  if (result<(unsigned []){0x80,0x800,0x10000}[c-2]) return -1;
-
-  // Limit unicode so it can't encode anything UTF-16 can't.
-  if (result>0x10ffff || (result>=0xd800 && result<=0xdfff)) return -1;
-  *wc = result;
-
-  return str-s;
 }
 
 #endif  // FOR_TOYBOX
@@ -562,6 +568,7 @@ static void get_token_text(char *op, int tk)
 // Return number of bytes in 'cnt' utf8 codepoints
 static int bytesinutf8(char *str, size_t len, size_t cnt)
 {
+  if (FLAG(b)) return cnt;
   unsigned wch;
   char *lim = str + len, *s0 = str;
   while (cnt-- && str < lim) {
