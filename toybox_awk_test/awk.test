@@ -419,7 +419,6 @@ testcmd "or()" "'BEGIN{print or(256, 16)}'" "272\n" "" ""
 testcmd "or(a, b, ...)" "'BEGIN{print or(256, 16, 8)}'" "280\n" "" ""
 testcmd "toupper()" "'BEGIN{print toupper(\"abABcD\")}'" "ABABCD\n" "" ""
 testcmd "tolower()" "'BEGIN{print tolower(\"abABcD\")}'" "ababcd\n" "" ""
-testcmd "tolower() utf8" "'{print tolower(\$0)}'" "ğжþ\n" "" "ĞЖÞ"
 testcmd "substr()" "'BEGIN{print substr(\"abac\", 2, 2)}'" "ba\n" "" ""
 testcmd "atan2()" "'BEGIN{print substr(atan2(0, -1), 1, 5)}'" "3.141\n" "" ""
 testcmd "length()" "'{print length()}'" "1\n2\n0\n4\n" "" "a\n12\n\n6502"
@@ -429,12 +428,15 @@ testcmd "length() utf8" "'{print length()}'< $FILES/utf8/japan.txt" "25\n" "" ""
 testcmd "substr() utf8" "'{print substr(\$0,2,1)}' < $FILES/utf8/arabic.txt" "ل\nأ\n" "" "" 
 testcmd "index() utf8" "'{print index(\$0, \"ス\")}' < $FILES/utf8/japan.txt"\
   "5\n" "" ""
+testcmd "tolower() utf8" "'{print tolower(\$0)}'" "ğжþ\n" "" "ĞЖÞ"
 testcmd "index() none" "'BEGIN{print index(\"ス\", \"deadbeef\")}'" "0\n" "" ""
 testcmd "match()" "'BEGIN{print match(\"bcdab\", \"ab\")}'" "4\n" "" ""
 testcmd "match() none" "'BEGIN{print match(\"ス\", \"deadbeef\")}'" "0\n" "" ""
 testcmd "match() utf8" "'{print match(\$0, \"ス\")}' < $FILES/utf8/japan.txt"\
   "5\n" "" ""
 testcmd "\\u" "'BEGIN{print \"\\u20\u255\"}' < /dev/null" " ɕ\n" "" ""
+testcmd "printf %c" "'BEGIN{a=255; printf \"%c%c%c\", a, b, 255}'"\
+  "ÿ\0ÿ" "" ""
 
 testcmd "-b" "-b '{print length()}'< $FILES/utf8/japan.txt" "75\n" "" ""
 
