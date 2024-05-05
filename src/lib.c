@@ -149,11 +149,6 @@ EXTERN char *xstrdup(char *s)
 }
 
 #endif  // FOR_TOYBOX
-EXTERN double str_to_num(char *s)
-{
-  return atof(s);
-}
-
 EXTERN int hexval(int c)
 {
   // Assumes c is valid hex digit

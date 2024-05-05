@@ -361,9 +361,6 @@ EXTERN struct optflags optflags;
 #define FLAG(x) (optflags.FLAG_##x)
 #endif  // FOR_TOYBOX
 
-// Forward ref declarations
-EXTERN struct zvalue *val_to_str(struct zvalue *v);
-
 #ifndef MONOLITHIC
 EXTERN char *escape_str(char *s, int is_regex);
 EXTERN char *progname;
@@ -394,7 +391,6 @@ EXTERN void *xmalloc(size_t size);
 EXTERN void *xrealloc(void *p, size_t size);
 EXTERN void *xzalloc(size_t size);
 EXTERN char *xstrdup(char *s);
-EXTERN double str_to_num(char *s);
 EXTERN int hexval(int c);
 EXTERN struct zlist *zlist_initx(struct zlist *p, size_t size, size_t count);
 EXTERN struct zlist *zlist_init(struct zlist *p, size_t size);
