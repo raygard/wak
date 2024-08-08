@@ -385,6 +385,7 @@ EXTERN int utf8towc(unsigned *wc, char *str, unsigned len);
 EXTERN int bytesinutf8(char *str, size_t len, size_t cnt);
 EXTERN int utf8cnt(char *str, size_t len);
 
+EXTERN void awk_exit(int status);
 EXTERN void error_exit(char *format, ...);
 EXTERN void xfree(void *p);
 EXTERN void *xmalloc(size_t size);

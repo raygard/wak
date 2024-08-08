@@ -99,7 +99,7 @@ int main(int argc, char **argv)
         break;
       case 'V':
         printf("<%s %s>\n", __DATE__, __TIME__);
-        exit(0);
+        awk_exit(0);
         break;
       case 'c':
         opt_run_prog = 0;

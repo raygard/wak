@@ -2027,5 +2027,5 @@ EXTERN void run(int optind, int argc, char **argv, char *sepstring,
   regfree(&TT.rx_last);
   free_literal_regex();
   close_file(0);    // close all files
-  if (status >= 0) exit(status);
+  if (status >= 0) awk_exit(status);
 }

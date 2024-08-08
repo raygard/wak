@@ -15,6 +15,12 @@ EXTERN void xfree(void *p)
 }
 
 #ifndef FOR_TOYBOX
+// awk_exit() to correspond to a wrapper for toybox
+EXTERN void awk_exit(int status)
+{
+  exit(status);
+}
+
 EXTERN void error_exit(char *format, ...)
 {
   va_list args;
@@ -24,7 +30,7 @@ EXTERN void error_exit(char *format, ...)
   va_end(args);
   putc('\n', stderr);
   fflush(stderr);
-  exit(2);
+  awk_exit(2);
 }
 
 // Compile a regular expression into a regex_t

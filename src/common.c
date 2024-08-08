@@ -46,7 +46,7 @@ EXTERN void zzerr(char *format, ...)
   va_end(args);
   if (format[strlen(format)-1] != '\n') fputc('\n', stderr); // TEMP FIXME !!!
   fflush(stderr);
-  if (fatal_sw) exit(2);
+  if (fatal_sw) awk_exit(2);
         // Don't bump error count for warnings
   else if (!strstr(format, "arning")) TT.cgl.compile_error_count++;
 }

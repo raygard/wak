@@ -144,3 +144,8 @@ GLOBALS(
   } *zfiles, *cfile, *zstdout;
 )
 
+static void awk_exit(int status)
+{
+  toys.exitval = status;
+  xexit();
+}

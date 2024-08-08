@@ -360,6 +360,12 @@ static void xfree(void *p)
 }
 
 #ifndef FOR_TOYBOX
+// awk_exit() to correspond to a wrapper for toybox
+static void awk_exit(int status)
+{
+  exit(status);
+}
+
 static void error_exit(char *format, ...)
 {
   va_list args;
@@ -369,7 +375,7 @@ static void error_exit(char *format, ...)
   va_end(args);
   putc('\n', stderr);
   fflush(stderr);
-  exit(2);
+  awk_exit(2);
 }
 
 // Compile a regular expression into a regex_t
@@ -541,7 +547,7 @@ static void zzerr(char *format, ...)
   va_end(args);
   if (format[strlen(format)-1] != '\n') fputc('\n', stderr); // TEMP FIXME !!!
   fflush(stderr);
-  if (fatal_sw) exit(2);
+  if (fatal_sw) awk_exit(2);
         // Don't bump error count for warnings
   else if (!strstr(format, "arning")) TT.cgl.compile_error_count++;
 }
@@ -4698,7 +4704,7 @@ static void run(int optind, int argc, char **argv, char *sepstring,
   regfree(&TT.rx_last);
   free_literal_regex();
   close_file(0);    // close all files
-  if (status >= 0) exit(status);
+  if (status >= 0) awk_exit(status);
 }
 
 ////////////////////
@@ -4795,7 +4801,7 @@ int main(int argc, char **argv)
         break;
       case 'V':
         printf("<%s %s>\n", __DATE__, __TIME__);
-        exit(0);
+        awk_exit(0);
         break;
       case 'c':
         opt_run_prog = 0;
