@@ -539,12 +539,12 @@ static struct zvalue *setup_lvalue(int ref_stack_ptr, int parmbase, int *field_n
   return v; // order FATAL() and return to mute warning
 }
 
-
-static struct zfile *new_file(char *fn, FILE *fp, char mode, char file_or_pipe)
+static struct zfile *new_file(char *fn, FILE *fp, char mode, char file_or_pipe,
+                              char is_std_file)
 {
   struct zfile *f = xzalloc(sizeof(struct zfile));
   *f = (struct zfile){TT.zfiles, xstrdup(fn), fp, mode, file_or_pipe,
-                        0, 0, 0, 0, 0, 0, 0, 0, 0};
+                isatty(fileno(fp)), is_std_file, 0, 0, 0, 0, 0, 0, 0, 0};
   return TT.zfiles = f;
 }
 
@@ -609,7 +609,7 @@ static struct zfile *setup_file(char file_or_pipe, char *mode)
     }
   FILE *fp = (file_or_pipe ? fopen : popen)(fn, mode);
   if (fp) {
-    struct zfile *p = new_file(fn, fp, *mode, file_or_pipe);
+    struct zfile *p = new_file(fn, fp, *mode, file_or_pipe, 0);
     drop();
     return p;
   }
@@ -826,10 +826,12 @@ static int next_fp(void)
   if (TT.cfile->fp && TT.cfile->fp != stdin) fclose(TT.cfile->fp);
   if ((!fn && !TT.rgl.nfiles && TT.cfile->fp != stdin) || (fn && !strcmp(fn, "-"))) {
     TT.cfile->fp = stdin;
+    TT.cfile->fn = "<stdin>";
     zvalue_release_zstring(&STACK[FILENAME]);
     STACK[FILENAME].vst = new_zstring("<stdin>", 7);
   } else if (fn) {
     if (!(TT.cfile->fp = fopen(fn, "r"))) FFATAL("can't open %s\n", fn);
+    TT.cfile->fn = fn;
     zvalue_copy(&STACK[FILENAME], &TT.rgl.cur_arg);
   } else {
     TT.rgl.eof = 1;
@@ -837,6 +839,7 @@ static int next_fp(void)
   }
   set_num(&STACK[FNR], 0);
   TT.cfile->recoffs = TT.cfile->endoffs = 0;  // reset record buffer
+  TT.cfile->is_tty = isatty(fileno(TT.cfile->fp));
   return 1;
 }
 
@@ -878,8 +881,8 @@ static int rx_findx(regex_t *rx, char *s, long len, regoff_t *start, regoff_t *e
 
 static ssize_t getrec_f(struct zfile *zfp)
 {
-  int r = 0, rs = ENSURE_STR(&STACK[RS])->vst->str[0] & 0xff;
-  if (!rs) return getrec_multiline(zfp);
+  int r = 0;
+  if (!ENSURE_STR(&STACK[RS])->vst->str[0]) return getrec_multiline(zfp);
   regex_t rsrx, *rsrxp = &rsrx;
   // TEMP!! FIXME Need to cache and avoid too-frequent rx compiles
   rx_zvalue_compile(&rsrxp, &STACK[RS]);
@@ -891,7 +894,11 @@ static ssize_t getrec_f(struct zfile *zfp)
 #define RS_LENGTH_MARGIN    (INIT_RECBUF_LEN / 8)
       if (!zfp->recbuf)
         zfp->recbuf = xmalloc((zfp->recbufsize = INIT_RECBUF_LEN) + 1);
-      zfp->endoffs = fread(zfp->recbuf, 1, zfp->recbufsize, zfp->fp);
+      if (zfp->is_tty && !memcmp(STACK[RS].vst->str, "\n", 2)) {
+        zfp->endoffs = 0;
+        if (fgets(zfp->recbuf, zfp->recbufsize, zfp->fp))
+          zfp->endoffs = strlen(zfp->recbuf);
+      } else zfp->endoffs = fread(zfp->recbuf, 1, zfp->recbufsize, zfp->fp);
       zfp->recoffs = 0;
       zfp->recbuf[zfp->endoffs] = 0;
       if (!zfp->endoffs) break;
@@ -2011,11 +2018,11 @@ EXTERN void run(int optind, int argc, char **argv, char *sepstring,
   xregcomp(&TT.rx_default, "[ \t\n]+", REG_EXTENDED);
   xregcomp(&TT.rx_last, "[ \t\n]+", REG_EXTENDED);
   xregcomp(&TT.rx_printf_fmt, printf_fmt_rx, REG_EXTENDED);
-  new_file("-", stdin, 'r', 'f')->is_std_file = 1;
-  new_file("/dev/stdin", stdin, 'r', 'f')->is_std_file = 1;
-  new_file("/dev/stdout", stdout, 'w', 'f')->is_std_file = 1;
+  new_file("-", stdin, 'r', 1, 1);
+  new_file("/dev/stdin", stdin, 'r', 1, 1);
+  new_file("/dev/stdout", stdout, 'w', 1, 1);
   TT.zstdout = TT.zfiles;
-  new_file("/dev/stderr", stderr, 'w', 'f')->is_std_file = 1;
+  new_file("/dev/stderr", stderr, 'w', 1, 1);
   seedrand(123);
   int status = -1, r = 0;
   if (TT.cgl.first_begin) r = interp(TT.cgl.first_begin, &status);

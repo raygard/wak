@@ -153,6 +153,7 @@ struct zfile {
   FILE *fp;
   char mode;  // w, a, or r
   char file_or_pipe;  // 1 if file, 0 if pipe
+  char is_tty;
   char is_std_file;
   char *recbuf;
   size_t recbufsize;

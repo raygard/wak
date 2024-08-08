@@ -5,7 +5,7 @@
  *
  * See https://pubs.opengroup.org/onlinepubs/9699919799/utilities/awk.html
 
-USE_AWK(NEWTOY(awk, "F:v*f*bc", TOYFLAG_USR|TOYFLAG_BIN))
+USE_AWK(NEWTOY(awk, "F:v*f*bc", TOYFLAG_USR|TOYFLAG_BIN|TOYFLAG_LINEBUF))
 
 config AWK
   bool "awk"
@@ -86,16 +86,11 @@ GLOBALS(
 
   struct runtime_globals {
     struct zvalue cur_arg;
-    //char *filename;     // UNUSED
     FILE *fp;           // current data file
     int narg;           // cmdline arg index
     int nfiles;         // num of cmdline data file args processed
     int eof;            // all cmdline files (incl. stdin) read
     char *recptr;
-    char *recbuf;
-    size_t recbufsize;
-    char *recbuf_multx;
-    size_t recbufsize_multx;
     struct zstring *zspr;      // Global to receive sprintf() string value
   } rgl;
 
@@ -132,7 +127,8 @@ GLOBALS(
     char *fn;
     FILE *fp;
     char mode;  // w, a, or r
-    char file_or_pipe;  // f or p
+    char file_or_pipe;  // 1 if file, 0 if pipe
+    char is_tty;
     char is_std_file;
     char *recbuf;
     size_t recbufsize;
