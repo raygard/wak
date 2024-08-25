@@ -258,7 +258,6 @@ enum spec_var_names { ARGC=1, ARGV, CONVFMT, ENVIRON, FILENAME, FNR, FS, NF,
 
 struct symtab_slot {    // global symbol table entry
   unsigned flags;
-  int slotnum;
   char *name;
 };
 
@@ -311,7 +310,6 @@ struct zstring {
 
 struct functab_slot {    // function symbol table entry
   unsigned flags;
-  int slotnum;
   char *name;
   struct zlist function_locals;
   int zcode_addr;

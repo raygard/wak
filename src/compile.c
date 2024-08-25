@@ -33,15 +33,15 @@ static int havetok(int tk)
 }
 
 //// code and "literal" emitters
-static void gen2cd(int op, int n)
-{
-  zlist_append(&TT.zcode, &op);
-  TT.zcode_last = zlist_append(&TT.zcode, &n);
-}
-
 static void gencd(int op)
 {
   TT.zcode_last = zlist_append(&TT.zcode, &op);
+}
+
+static void gen2cd(int op, int n)
+{
+  gencd(op);
+  gencd(n);
 }
 
 static int make_literal_str_val(char *s)
@@ -71,8 +71,7 @@ static int make_literal_num_val(double num)
 
 static int make_uninit_val(void)
 {
-  struct zvalue v = uninit_zvalue;
-  return zlist_append(&TT.literals, &v);
+  return zlist_append(&TT.literals, &uninit_zvalue);
 }
 //// END code and "literal" emitters
 
@@ -86,10 +85,9 @@ static int find_func_def_entry(char *s)
 
 static int add_func_def_entry(char *s)
 {
-  struct functab_slot ent = {0, 0, 0, {0, 0, 0, 0}, 0};
+  struct functab_slot ent = {0, 0, {0, 0, 0, 0}, 0};
   ent.name = xstrdup(s);
   int slotnum = zlist_append(&TT.func_def_table, &ent);
-  FUNC_DEF[slotnum].slotnum = slotnum;
   return slotnum;
 }
 
@@ -102,10 +100,9 @@ EXTERN int find_global(char *s)
 
 static int add_global(char *s)
 {
-  struct symtab_slot ent = {0, 0, 0};
+  struct symtab_slot ent = {0, 0};
   ent.name = xstrdup(s);
   int slotnum = zlist_append(&TT.globals_table, &ent);
-  GLOBAL[slotnum].slotnum = slotnum;
   return slotnum;
 }
 
@@ -118,10 +115,9 @@ static int find_local_entry(char *s)
 
 static int add_local_entry(char *s)
 {
-  struct symtab_slot ent = {0, 0, 0};
+  struct symtab_slot ent = {0, 0};
   ent.name = xstrdup(s);
   int slotnum = zlist_append(&TT.locals_table, &ent);
-  LOCAL[slotnum].slotnum = slotnum;
   return slotnum;
 }
 
@@ -131,11 +127,11 @@ static int find_or_add_var_name(void)
   int globals_ent = 0;
   int locals_ent = find_local_entry(TT.tokstr);   // in local symbol table?
   if (locals_ent) {
-    slotnum = -LOCAL[locals_ent].slotnum;
+    slotnum = -locals_ent;
   } else {
     globals_ent = find_global(TT.tokstr);
     if (!globals_ent) globals_ent = add_global(TT.tokstr);
-    slotnum = GLOBAL[globals_ent].slotnum;
+    slotnum = globals_ent;
     if (find_func_def_entry(TT.tokstr))
       // POSIX: The same name shall not be used both as a variable name
       // with global scope and as the name of a function.
@@ -448,9 +444,7 @@ static void function_call(void)
   //  push placeholder for return value, push placeholder for return addr,
   //  push args, then push number of args, then:
   //      for builtins: gen opcode (e.g. tkgsub)
-  //      for user func: gen (tkfunc, function location)
-  //      if function not yet defined, location will be filled in when defined
-  //          the location slots will be chained from the symbol table
+  //      for user func: gen (tkfunc, number-of-args)
   int functk = 0, funcnum = 0;
   char builtin_name[16];  // be sure it's long enough for all builtins
   if (ISTOK(tkbuiltin)) {
