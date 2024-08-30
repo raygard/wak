@@ -32,6 +32,21 @@ or
 musl-gcc -Os -funsigned-char -std=gnu99 -Wall -Wextra -W -Wpointer-arith -Wstrict-prototypes -pedantic mono.c -static -s -o wak
 ```
 
+Also, you can compile this with TCC (Tiny C Compiler, aka tcc) or run it as a script! Install the version maintained at https://repo.or.cz/w/tinycc.git, or the unofficial mirror which is at https://github.com/TinyCC/tinycc, and put this line at the top of the `mono.c` file:
+```
+#!/usr/local/bin/tcc -run -funsigned-char
+```
+(Note it will not run correctly without -funsigned-char.) Thank you @davidar for this tip!
+
+### Compatibility
+
+`wak` tries to be compatible with [POSIX.1-2024](https://pubs.opengroup.org/onlinepubs/9799919799/utilities/awk.html), the major exception being that `wak` does not honor the various locale-related parts of the spec. Instead, it follows Rob Landley's toybox approach of trying to be as "UTF-8 safe" as reasonably possible, but do not attempt to be locale-conformant beyond that.
+Other departures are made to better match actual implementations rather than the POSIX spec exactly. For example, `wak` accepts regular expressions for the record separator RS, as do other common implementations. Another example: POSIX says "Field variables shall have the uninitialized value when created from $0 using FS and the variable does not contain any characters." `wak` creates field variables as strings, never the uninitialized value, just as other awks do.
+
+In general, `wak` follows POSIX except where it conflicts with traditional and common practice in other implementations.
+
+Since the POSIX update was released only recently, I am still reviewing it to see what changes `wak` needs to make it more conformant.
+
 ### Bugs
 
 I'm sure there are plenty of bugs.
