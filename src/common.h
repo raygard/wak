@@ -21,6 +21,7 @@
 #include <locale.h>
 #include <wchar.h>
 #include <wctype.h>
+#include <errno.h>
 #include <assert.h>
 
 // for getopt():
@@ -153,15 +154,10 @@ struct zfile {
   FILE *fp;
   char mode;  // w, a, or r
   char file_or_pipe;  // 1 if file, 0 if pipe
-  char is_tty;
-  char is_std_file;
-  char *recbuf;
-  size_t recbufsize;
-  char *recbuf_multi;
-  size_t recbufsize_multi;
-  char *recbuf_multx;
-  size_t recbufsize_multx;
-  int recoffs, endoffs;
+  char is_tty, is_std_file;
+  char eof;
+  int ro, lim, buflen;
+  char *buf;
 };
 
 // Global data

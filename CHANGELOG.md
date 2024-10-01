@@ -1,5 +1,12 @@
 # Changelog
 
+## 2024-09-30 
+- Rewrite record-reading routines
+
+## 2024-09-07 
+- Add tests (toybox)
+- Fix field split bug when RS="" and FS is one char
+
 ## 2024-08-29
 - Add CHANGELOG.md, updated README.md
 - Mod to permit RS="()" to work as it does in gawk, nawk, goawk

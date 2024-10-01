@@ -3,7 +3,14 @@
  *
  * Copyright 2024 Ray Gardner <raygard@gmail.com>
  *
- * See https://pubs.opengroup.org/onlinepubs/9699919799/utilities/awk.html
+ * See https://pubs.opengroup.org/onlinepubs/9799919799/utilities/awk.html
+ *
+ * Deviations from posix: Don't handle LANG, LC_ALL, etc.
+ *   Accept regex for RS
+ *   Bitwise functions (from gawk): and, or, xor, lshift, rshift
+ *   Attempt to follow tradition (nawk, gawk) where it departs from posix
+ *
+ * TODO: Lazy field splitting; improve performance; more testing/debugging
 
 USE_AWK(NEWTOY(awk, "F:v*f*bc", TOYFLAG_USR|TOYFLAG_BIN|TOYFLAG_LINEBUF))
 
@@ -16,7 +23,7 @@ config AWK
             awk [-F sepstring] -f progfile [-f progfile]... [-v assignment]...
                   [argument...]
       also:
-      -b : use bytes, not characters
+      -b : count bytes, not characters (experimental)
       -c : compile only, do not run
 */
 
@@ -128,15 +135,10 @@ GLOBALS(
     FILE *fp;
     char mode;  // w, a, or r
     char file_or_pipe;  // 1 if file, 0 if pipe
-    char is_tty;
-    char is_std_file;
-    char *recbuf;
-    size_t recbufsize;
-    char *recbuf_multi;
-    size_t recbufsize_multi;
-    char *recbuf_multx;
-    size_t recbufsize_multx;
-    int recoffs, endoffs;
+    char is_tty, is_std_file;
+    char eof;
+    int ro, lim, buflen;
+    char *buf;
   } *zfiles, *cfile, *zstdout;
 )
 
