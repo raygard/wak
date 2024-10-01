@@ -1,5 +1,9 @@
 # Changelog
 
+## 2024-10-01 
+- Add tests for awk split() on empty regex (toybox)
+- Fix out-of-bounds memory access in splitter()
+
 ## 2024-09-30 
 - Rewrite record-reading routines
 
