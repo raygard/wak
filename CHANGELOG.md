@@ -1,5 +1,8 @@
 # Changelog
 
+## 2024-10-05 
+- Mute clang warnings
+
 ## 2024-10-01 
 - Add tests for awk split() on empty regex (toybox)
 - Fix out-of-bounds memory access in splitter()

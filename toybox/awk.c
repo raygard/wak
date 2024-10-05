@@ -767,7 +767,7 @@ static int get_char(void)
     // FIXME TODO or check for error? feof() vs. ferror()
     fclose(TT.scs->fp);
     TT.scs->fp = 0;
-    TT.scs->p = "  " + 2;
+    TT.scs->p = &("  "[2]);   // Quiet clang warning on "  " + 2;
     if (!TT.scs->prog_args) {
       xfree(TT.scs->line);
       if (lastchar == '\n') return EOF;
@@ -991,7 +991,7 @@ static void ascan_opt_div(int div_op_allowed_here)
       TT.scs->toktype = BUILTIN;
       TT.scs->tok = tkbuiltin;
       TT.scs->tokbuiltin = n;
-    } else if ((TT.scs->ch == '(')) {
+    } else if (TT.scs->ch == '(') {
       TT.scs->toktype = USERFUNC;
       TT.scs->tok = tkfunc;
     } else {
@@ -4532,7 +4532,7 @@ static void run(int optind, int argc, char **argv, char *sepstring,
 
 static void progfiles_init(char *progstring, struct arg_list *prog_args)
 {
-  TT.scs->p = progstring ? progstring : "  " + 2;
+  TT.scs->p = progstring ? progstring : &("  "[2]);   // Quiet clang warning on "  " + 2;
   TT.scs->progstring = progstring;
   TT.scs->prog_args = prog_args;
   TT.scs->filename = "(cmdline)";

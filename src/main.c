@@ -11,7 +11,7 @@
 
 static void progfiles_init(char *progstring, struct arg_list *prog_args)
 {
-  TT.scs->p = progstring ? progstring : "  " + 2;
+  TT.scs->p = progstring ? progstring : &("  "[2]);   // Quiet clang warning on "  " + 2;
   TT.scs->progstring = progstring;
   TT.scs->prog_args = prog_args;
   TT.scs->filename = "(cmdline)";
