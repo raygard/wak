@@ -1,5 +1,9 @@
 # Changelog
 
+## 2024-10-08 
+- Fix bug assigning NF=0; add toybox test for it
+- Fix bug assigning NF negative
+
 ## 2024-10-05 
 - Mute clang warnings
 

@@ -46,8 +46,6 @@ static int get_char(void)
     if (TT.scs->line == nl) return EOF;
     if (!TT.scs->fp) {
       progfile_open();
-    // The "  " + 1 is to set p to null string but allow ref to prev char for
-    // "lastchar" test below.
     }
     // Save last char to allow faking final newline.
     int lastchar = (TT.scs->p)[-2];

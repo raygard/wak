@@ -937,8 +937,6 @@ static int get_char(void)
     if (TT.scs->line == nl) return EOF;
     if (!TT.scs->fp) {
       progfile_open();
-    // The "  " + 1 is to set p to null string but allow ref to prev char for
-    // "lastchar" test below.
     }
     // Save last char to allow faking final newline.
     int lastchar = (TT.scs->p)[-2];
@@ -2901,6 +2899,7 @@ static void set_zvalue_str(struct zvalue *v, char *s, size_t size)
 // All changes to NF go through here!
 static void set_nf(int nf)
 {
+  if (nf < 0) FATAL("NF set negative");
   STACK[NF].num = TT.nf_internal = nf;
   STACK[NF].flags = ZF_NUM;
 }
@@ -2942,7 +2941,7 @@ static int splitter(void (*setter)(struct zmap *, int, char *, size_t), struct z
         char cbuf[8];
         unsigned wc;
         int nc = utf8towc(&wc, s, strlen(s));
-        if (nc < 2) FATAL("bad string for split: \"%s\"\n", s0);
+        if (nc < 2) FFATAL("bad string for split: \"%s\"\n", s0);
         s += nc;
         nc = wctoutf8(cbuf, wc);
         setter(m, ++nf, cbuf, nc);
@@ -2988,6 +2987,10 @@ static void rebuild_field0(void)
 {
   struct zstring *s = FIELD[0].vst;
   int nf = TT.nf_internal;
+  if (!nf) {
+    zvalue_copy(&FIELD[0], &uninit_string_zvalue);
+    return;
+  }
   // uninit value needed for eventual reference to .vst in zstring_release()
   struct zvalue tempv = uninit_zvalue;
   zvalue_copy(&tempv, to_str(&STACK[OFS]));
