@@ -9,6 +9,10 @@
 //// main
 ////////////////////
 
+#ifndef FOR_TOYBOX
+char *version = "24.10 20241008";
+
+#endif  // FOR_TOYBOX
 static void progfiles_init(char *progstring, struct arg_list *prog_args)
 {
   TT.scs->p = progstring ? progstring : &("  "[2]);   // Quiet clang warning on "  " + 2;
@@ -66,7 +70,9 @@ int main(int argc, char **argv)
       "awk [-F sepstring] -f progfile [-f progfile]...\n"
       "               [-v assignment]...  [argument...]\n"
       "also:\n"
-      "-V show version\n"
+      "-V or --version  show version\n"
+      "-h or --help     show this usage screen\n"
+
       "-b use bytes, not characters\n"
       "-c compile only, do not run\n"
   };
@@ -83,7 +89,9 @@ int main(int argc, char **argv)
   struct arg_list *prog_args = 0, **tail_prog_args = &prog_args;
   struct arg_list *assign_args = 0, **tail_assign_args = &assign_args;
 
-  while ((opt = getopt(argc, argv, "F:f:v:Vbc")) != -1) {
+  struct option longopts[] = {{"version", 0, 0, 'V'}, {"help", 0, 0, 'h'}, {0}};
+  
+  while ((opt = getopt_long(argc, argv, "F:f:v:Vbch", longopts, 0)) != -1) {
     switch (opt) {
       case 'F':
         sepstring = escape_str(optarg, 0);
@@ -98,11 +106,15 @@ int main(int argc, char **argv)
         tail_assign_args = new_arg(tail_assign_args, optarg);
         break;
       case 'V':
-        printf("<%s %s>\n", __DATE__, __TIME__);
+        printf("version %s, compiled %s %s\n", version, __DATE__, __TIME__);
         awk_exit(0);
         break;
       case 'c':
         opt_run_prog = 0;
+        break;
+      case 'h':
+        printf("%s", usage);
+        exit(0);
         break;
         break;
       default:

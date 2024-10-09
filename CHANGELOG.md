@@ -3,6 +3,7 @@
 ## 2024-10-08 
 - Fix bug assigning NF=0; add toybox test for it
 - Fix bug assigning NF negative
+- Add long options --help, --version
 
 ## 2024-10-05 
 - Mute clang warnings

@@ -24,8 +24,10 @@
 #include <errno.h>
 #include <assert.h>
 
-// for getopt():
+// for isatty():
 #include <unistd.h>
+// for getopt_long():
+#include <getopt.h>
 #include <regex.h>
 #if defined(__unix__) || defined(linux)
 #include <langinfo.h>
