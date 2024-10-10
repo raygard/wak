@@ -1,21 +1,24 @@
 # Changelog
 
-## 2024-10-08 
+## 2024-10-10
+- New improved makefile and a set of tests
+
+## 2024-10-08
 - Fix bug assigning NF=0; add toybox test for it
 - Fix bug assigning NF negative
 - Add long options --help, --version
 
-## 2024-10-05 
+## 2024-10-05
 - Mute clang warnings
 
-## 2024-10-01 
+## 2024-10-01
 - Add tests for awk split() on empty regex (toybox)
 - Fix out-of-bounds memory access in splitter()
 
-## 2024-09-30 
+## 2024-09-30
 - Rewrite record-reading routines
 
-## 2024-09-07 
+## 2024-09-07
 - Add tests (toybox)
 - Fix field split bug when RS="" and FS is one char
 

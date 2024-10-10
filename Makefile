@@ -1,156 +1,191 @@
+# Makefile for wak
+.POSIX:
+#.SILENT:
+
+.PHONY: clean all allplus mono win windows toy help
+
+prefix=/usr/local
+
+#CC = clang
 CC = gcc
 
-usage_msg:
-	@echo Usage: make target
-	@echo Where 'target' is one of: normal asan profiling monolithic musl toy all windows
-	@echo all includes normal asan profiling monolithic -- not musl, toy, or windows
-	@echo  - Install musl to use 'make musl'
-	@echo  - Install msys2 to use 'make windows' -- in Windows
+MUSLCC = /usr/local/musl/bin/musl-gcc
 
-.PHONY: normal asan profiling monolithic all windows clean foo usage_msg
+CFLAGS = -O3 -funsigned-char -std=c99 -Wall -Wextra -W -Wpointer-arith -Wstrict-prototypes -D_POSIX_C_SOURCE=200809L
 
-normal: ./exe/wak
+# Order is significant for monolithic source mono.c and toybox awk!
+SRC = ./src/lib.c ./src/common.c ./src/scan.c ./src/compile.c ./src/run.c ./src/main.c
+ALLSRC = ./src/common.h $(SRC)
 
-asan: ./asan/wak
+AWK=./aswak
+AWK=./wak
 
-profiling: ./prof/wak
+TESTDIR=./test
 
-monolithic: ./mono/wak
+all: wak
 
-mono: monolithic
+help:
+	@echo "Usage: make OR make all OR make target ..."
 
-musl: ./musl/wak
+	@echo "Where 'target' is one of all wak mwak aswak prwak muwak mmuwak ..."
+	@echo "... mono win check install test clean extra musl toy help"
+	@echo "Default (no target) makes wak"
+	@echo "all      -- makes wak"
+	@echo "wak      -- wak (from separate .c files)"
+	@echo "mwak     -- wak from monolithic (single source file)"
+	@echo "aswak    -- ASAN (address sanitizer) wak (for debugging)"
+	@echo "prwak    -- profiling wak"
+	@echo "muwak    -- musl wak from separate .c files"
+	@echo "mmuwak   -- musl wak from monolithic source"
+	@echo "win      -- wak.exe for Windows (requires msys2, build under Windows)"
+	@echo "mono     -- make monolithic source (in monosrc/ , not compiled)"
+	@echo "check    -- run some validation tests"
+	@echo "test     -- same as check"
+	@echo "install  -- try to install wak in /usr/local/bin; only for wak"
+	@echo "clean    -- remove compiled versions etc."
+	@echo "help     -- show this screen"
+	@echo "extra    -- makes mwak aswak prwak"
+	@echo "musl     -- makes muwak mmuwak"
+	@echo "toy      -- makes toybox source; not compiled"
+	@echo "muwak and mmuwak require musl system (musl-gcc)"
 
-all: normal asan profiling monolithic
+#foo:
+#	echo CFLAGS: $(CFLAGS)
+#	echo LDFLAGS: $(LDFLAGS)
+
+
+#bar:
+#	cat $(ALLSRC) > all.c
+
+extra: mwak aswak prwak
+
+musl: muwak mmuwak
+
+wak: $(ALLSRC)
+	$(CC) $(CFLAGS) $(SRC) -lm -o wak
+
+prwak: $(ALLSRC)
+	$(CC) $(CFLAGS) $(SRC) -lm -pg -o prwak
+
+aswak: $(ALLSRC)
+	$(CC) $(CFLAGS) -fsanitize=address $(SRC) -lm -o aswak
+
+mono: ./monosrc/mono.c
+
+./monosrc/mono.c: $(ALLSRC)
+	@mkdir -p $(@D)
+	awk -f ./scripts/make_mono.awk $(ALLSRC) > $@
+
+mwak: ./monosrc/mono.c
+	$(CC) $(CFLAGS) ./monosrc/mono.c -lm -o mwak
+
+mmuwak: ./monosrc/mono.c
+	$(MUSLCC) $(CFLAGS) $^ -static -s -lm -o mmuwak
+
+muwak: $(ALLSRC)
+	$(MUSLCC) $(CFLAGS) $(SRC) -static -s -lm -o muwak
+
+win windows: ./wak.exe
+
+./wak.exe: $(ALLSRC) ./getline.c
+	gcc $(CFLAGS) $(SRC) ./getline.c -o $@  -lm -llibregex
 
 toy: ./toybox/awk
-
-windows: ./win/wak.exe
-
-# Order is significant for monolithic source mono.c!
-SRC = ./src/common.h ./src/lib.c ./src/common.c ./src/scan.c ./src/compile.c ./src/run.c ./src/main.c
-
-OBJS = ./objects/lib.o ./objects/common.o ./objects/compile.o ./objects/scan.o ./objects/main.o ./objects/run.o
-
-ASANOBJS = ./asanobjects/lib.o ./asanobjects/common.o ./asanobjects/compile.o ./asanobjects/scan.o ./asanobjects/main.o ./asanobjects/run.o
-
-PROFOBJS = ./profobjects/lib.o ./profobjects/common.o ./profobjects/compile.o ./profobjects/scan.o ./profobjects/main.o ./profobjects/run.o
-
-WINOBJS = ./winobjects/lib.obj ./winobjects/common.obj ./winobjects/compile.obj ./winobjects/scan.obj ./winobjects/main.obj ./winobjects/run.obj winobjects/getline.obj
-
-$(OBJS): ./src/common.h
-
-$(WINOBJS): ./src/common.h
-
-
-CFLAGS = -O3 -funsigned-char  -std=c99 -Wall -Wextra -W -Wpointer-arith -Wstrict-prototypes -pedantic -D_POSIX_C_SOURCE=200809L -fsanitize=address -fno-omit-frame-pointer -static-libasan -lrt -g -ggdb
-CFLAGS = -O3 -funsigned-char -std=gnu99 -Wall -Wextra -W -Wpointer-arith -Wstrict-prototypes -g -ggdb
-CFLAGS = -O3 -funsigned-char -std=c99 -Wall -Wextra -W -Wpointer-arith -Wstrict-prototypes -g -ggdb
-CFLAGS = -O3 -funsigned-char -std=c99 -D_POSIX_C_SOURCE=200809L -Wall -Wextra -W -Wpointer-arith -Wstrict-prototypes -pedantic -g -ggdb -fsanitize=address
-CFLAGS = -O3 -funsigned-char -std=c99 -Wall -Wextra -W -Wpointer-arith -Wstrict-prototypes
-CFLAGS = -O3 -funsigned-char -std=c99 -Wall -Wextra -W -Wpointer-arith -Wstrict-prototypes -pedantic -D_POSIX_C_SOURCE=200809L -g -ggdb
-CFLAGS = -O3 -funsigned-char -std=c99 -Wall -Wextra -W -Wpointer-arith -Wstrict-prototypes -D_POSIX_C_SOURCE=200809L -g -ggdb
-
-#LDFLAGS = -flto -lm -llibregex -Xlinker -Map=./objects/link.map
-#LDFLAGS = -flto -lm -Xlinker -Map=./objects/link.map -fsanitize=address
-#LDFLAGS = -flto -lm -Xlinker -Map=./objects/link.map
-
-./exe/wak: LDFLAGS = -flto -lm -Xlinker -Map=./objects/link.map
-./exe/wak: $(OBJS)
-	@mkdir -p $(@D)
-	$(CC) $(CFLAGS) $^ -o $@ $(LDFLAGS)
-
-./objects/%.o: ./src/%.c
-	@mkdir -p $(@D)
-	$(CC) $(CFLAGS) -c $< -o $@
-
-./asan/wak: LDFLAGS = -flto -lm -Xlinker -Map=./asanobjects/link.map -fsanitize=address
-./asan/wak: $(ASANOBJS)
-	@mkdir -p $(@D)
-	$(CC) $(CFLAGS) $^ -o $@ $(LDFLAGS)
-
-./asanobjects/%.o: ./src/%.c
-	@mkdir -p $(@D)
-	$(CC) $(CFLAGS) -fsanitize=address -fno-omit-frame-pointer -static-libasan -c $< -o $@
-
-
-./prof/wak: LDFLAGS = -flto -lm -Xlinker -Map=./profobjects/link.map -pg
-./prof/wak: $(PROFOBJS)
-	@mkdir -p $(@D)
-	$(CC) $(CFLAGS) $^ -o $@ $(LDFLAGS)
-
-#./profobjects/%.o: CFLAGS = -O3 -funsigned-char -std=c99 -Wall -Wextra -W -Wpointer-arith -Wstrict-prototypes -g -ggdb -pg -fprofile-arcs -ftest-coverage
-#./profobjects/%.o: CFLAGS = -O3 -funsigned-char -std=c99 -Wall -Wextra -W -Wpointer-arith -Wstrict-prototypes -g -ggdb -pg
-#./profobjects/%.o: CFLAGS = $(CFLAGS) -pg -fprofile-arcs -ftest-coverage
-./profobjects/%.o: ./src/%.c
-	@mkdir -p $(@D)
-	$(CC) $(CFLAGS) -pg -c $< -o $@
-
-
-./mono/wak: LDFLAGS = -flto -lm -Xlinker -Map=./monoobjects/link.map
-./mono/wak: ./monoobjects/mono.o
-	@mkdir -p $(@D)
-	$(CC) $(CFLAGS) $^ -o $@ $(LDFLAGS)
-
-./monoobjects/%.o: ./monosrc/%.c
-	@mkdir -p $(@D)
-	$(CC) $(CFLAGS) -c $< -o $@
-
-./monosrc/mono.c: $(SRC)
-	@mkdir -p $(@D)
-	awk -f ./scripts/make_mono.awk $(SRC) > $@
-
-
-./musl/wak: CC = /usr/local/musl/bin/musl-gcc
-./musl/wak: LDFLAGS = -static -s
-./musl/wak: ./muslobjects/mono.o
-	@mkdir -p $(@D)
-	$(CC) $(CFLAGS) $^ -o $@ $(LDFLAGS)
-
-#CFLAGS = -Os -funsigned-char -std=c99 -Wall -Wextra -W -Wpointer-arith -Wstrict-prototypes -pedantic -D_POSIX_C_SOURCE=200809L
-#LDFLAGS = -static -s
-./muslobjects/%.o: CC = /usr/local/musl/bin/musl-gcc
-./muslobjects/%.o: ./monosrc/%.c
-	@mkdir -p $(@D)
-	$(CC) $(CFLAGS) -Os -c $< -o $@
 
 ./toybox/awk: ./monosrc/mono.c
 	@mkdir -p $(@D)
 	awk -f ./scripts/make_toybox_awk.awk ./monosrc/mono.c > $@.c
 
-./win/wak.exe: LDFLAGS = -flto -lm -llibregex -Xlinker -Map=./winobjects/link.map
-./win/wak.exe: $(WINOBJS)
-	@mkdir -p $(@D)
-	$(CC) $(CFLAGS) $^ -o $@ $(LDFLAGS)
+clean:
+	-rm wak prwak aswak mwak muwak mmuwak
 
-./winobjects/%.obj: CFLAGS = -O1 -funsigned-char -std=c99 -Wall -Wextra -W -Wpointer-arith -Wstrict-prototypes -pedantic -D_POSIX_C_SOURCE=200809L
-./winobjects/%.obj: ./src/%.c
-	@-mkdir $(@D)
-	$(CC) $(CFLAGS) -c $< -o $@
-./winobjects/%.obj: ./winsrc/%.c
-	@-mkdir $(@D)
-	$(CC) $(CFLAGS) -c $< -o $@
+install: ./wak
+	mkdir -p $(DESTDIR)$(prefix)/bin
+	cp $? $(DESTDIR)$(prefix)/bin/
+	chmod 775 $(DESTDIR)$(prefix)/bin/wak
 
-clean :
-	-rm -f ./exe/*
-	-rm -f ./asan/*
-	-rm -f ./prof/*
-	-rm -f ./mono/*
-	-rm -f ./musl/*
-	-rm -f ./win/*
-	-rm -f ./objects/* ./asanobjects/* ./profobjects/* ./monoobjects/* ./muslobjects/* ./winobjects/*
+check test: check-wak
 
-foo:
-	@echo cpp: $(SRC)
-	@echo objs: $(OBJS)
-	@echo profobjs: $(PROFOBJS)
-	@echo winobjs: $(WINOBJS)
-	@echo exe: wak
-	@echo srcdir: ./src
-	@echo objdir: ./objects
-	@echo profobjdir: ./profobjects
-	@echo exedir: ./exe
-	@echo asandir: ./asan
-	@echo profdir: ./prof
+# tests from gawk test set passed by gawk and nawk
+# Beware busybox goes infinite loop output on rsnullre!
+gawk_nawk= anchor backgsub closebad convfmt dynlj fieldassign \
+forsimp fpat8 fscaret fsrs funlen gsubtest hex lc_num1 negrange \
+nulrsend ofmta onlynl opasnslf printf1 rebuf rsnul1nl rsnullre \
+rstest1 rstest5 rswhite sortfor2 splitwht substr tailrecurse \
+unicode1 uparrfs wjposer1 addcomma anchgsub arrayind3 arrayprm3 \
+arrayref arrymem1 arynasty arysubnm aryunasgn asgext \
+assignnumfield assignnumfield2 clobber compare2 concat2 concat4 \
+concat5 dfacheck2 dfastress divzero2 elemnew2 escapebrace exitval2 \
+fldchg fldchgnf fldterm fmttest fsbs fsfwfs fstabplus funsemnl \
+gensub3 getline3 getline4 getlnbuf getlnhd getnr2tb getnr2tm \
+gsubtst8 igncdym ignrcas2 inpref intest intprec leaddig leadnl \
+longsub longwrds manglprm match4 math mbprintf2 mbprintf3 mdim3 \
+mdim4 mdim8 minusstr mmap8k mpfrfield mpfrnonum mpfrrem mtchi18n \
+nasty nasty2 negexp nested nfloop nfset nlfldsep nlinstr nlstrina \
+numindex numstr1 numsubstr octsub ofmt ofmtbig ofmtfidl ofmts \
+ofmtstrnum ofs1 opasnidx paramtyp paramuninitglobal pcntplus \
+pipeio1 prdupval prec printfbad3 printfchar profile12 prt1eval \
+range1 regeq regexprange reginttrad reint reint2 reparse resplit \
+rs rsstart1 rstest2 rstest4 rstest6 setrec0 setrec1 sigpipe1 \
+spacere splitarr splitdef splitvar sprintfc strcat1 strfieldnum \
+strnum1 strnum2 strsubscript subamp subi18n subsepnm subslash \
+swaplns tweakfld uplus wideidx wideidx2 widesub widesub2 widesub3 \
+zero2 zeroe0 zeroflag
 
-#######################
+# tests from gawk test set passed by gawk and wak; others fail some
+gawk_more= arrayind1 arrayprm2 aryprm8 aryprm9 backsmalls2 concat1 \
+concat3 crlf delarprm elemnew1 eofsplit exit2 fnarydel fnparydl \
+fordel forref getline getline5 gsubtst2 gsubtst3 gsubtst4 inputred \
+intarray iobug1 mdim5 mdim7 membug1 mpfrieee mpfrnegzero \
+mpfrnegzero2 nfldstr noloop1 noloop2 nondec posix prmreuse \
+prtoeval rri1 rstest3 shadowbuiltin splitargv stupid2 tradanch
+
+# Remove >/dev/null on echo "PASS:..." to see what passes
+check-wak:
+	@echo "================= begin wak tests =================" ; \
+	ntest=0; \
+	npass=0; \
+	nfail=0; \
+	ntotal=`echo ${gawk_nawk} ${gawk_more} | wc -w`; \
+	for f in ${gawk_nawk} ${gawk_more}; \
+	do \
+		fn=$(TESTDIR)/gawktests/$$f; \
+		ntest=`expr $$ntest + 1`; \
+	    printf "                             \r[%2d / %d] %s \r" $$ntest $$ntotal $$f ;					\
+		awkfn=$$fn.awk; \
+		infn=$$fn.in; \
+		okfn=$$fn.ok; \
+		outfn=$$fn.out; \
+		if [ -e $$awkfn ] && [ -e $$okfn ]; \
+		then \
+			if [ -e $$infn ]; \
+			then \
+				$(AWK) -f $$awkfn $$infn   >$$outfn </dev/null || true; \
+			else \
+				$(AWK) -f $$awkfn          >$$outfn </dev/null || true; \
+			fi ;\
+			if cmp $$okfn $$outfn > /dev/null ; \
+			then \
+				npass=`expr $$npass + 1`; \
+				rm -f $$outfn; \
+				echo "PASS: $$awkfn" >/dev/null; \
+			else \
+				nfail=`expr $$nfail + 1`; \
+				echo "FAIL: $$awkfn"; \
+			fi ;\
+		else \
+			echo "NOTFOUND: $$awkfn"; \
+		fi ; \
+	done; \
+	echo ;											\
+	echo PASS: $$npass of $$ntest tests ;							\
+	test $$nfail -ne 0 && echo FAIL: $$nfail of $$ntest tests ;				\
+	echo ;											\
+	test $$nfail -eq 0 && echo ALL TESTS PASSED! ;						\
+	echo ;											\
+	echo "cleaning up after tests..." ;		\
+	rm seq test1 test2 errors.cleanup && true; \
+	echo ;											\
+	echo "===================== end test =====================" ;		\
+	echo
+

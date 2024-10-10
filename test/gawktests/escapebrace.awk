@@ -1,0 +1,2 @@
+/\{/
+# should be no warning
