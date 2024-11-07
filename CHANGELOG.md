@@ -1,5 +1,12 @@
 # Changelog
 
+## 2024-11-06
+- Add getline.c for Windows (msys) build
+- Add man page, configure script, Makefile.in
+- Update Makefile
+- Replace random number generator (not for toybox)
+- Change monosrc/mono.c to onefile/wak.c
+
 ## 2024-10-10
 - New improved makefile and a set of tests
 

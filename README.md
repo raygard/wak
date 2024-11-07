@@ -10,7 +10,7 @@ The code is C99, but one feature, anonymous unions, used in the `struct zvalue` 
 
 #### Acknowledgement
 
-Many thanks to noted awk expert Prof. Nelson H. F. Beebe (Univ. of Utah) for advice on improving the program and makefile. He spent considerable time testing wak on different systems and writing suggestions to make wak better.
+Many thanks to Prof. Nelson H. F. Beebe (Univ. of Utah) for advice on improving the program and makefile. He spent considerable time testing `wak` on different systems and writing suggestions to make `wak` better.
 
 ### Building, testing, installing
 
@@ -19,30 +19,30 @@ Many thanks to noted awk expert Prof. Nelson H. F. Beebe (Univ. of Utah) for adv
 - `make install` will copy `wak` to `/usr/local/bin` by default. (May need `sudo make install`)
 - `make help` will display all (?) make options.
 - You may set `DESTDIR=` and/or `prefix=` as `make` args.
-- A dummy `configure` script is included. I hope to include a functional one later.
+- An improved `configure` script is included. You may use options `CC=`, `CFLAGS=`, `--prefix=` to control compilation and installation. This is a minimal hand-written script; it does not probe for dependencies.
 
 With `msys2` installed under Windows, `make win` will build a `wak.exe` for Windows.
 
 These files compile on my machine with `gcc 13.2.0` and `clang 19.1.0`. The build defaults to using gcc.
 
-You can also just compile the `monosrc/mono.c` version in Linux:
+You can also just compile the `onefile/wak.c` version in Linux:
 ```
-gcc -Os -funsigned-char -std=c99 -Wall -Wextra -W -Wpointer-arith -Wstrict-prototypes -pedantic  -D_POSIX_C_SOURCE=200809L  mono.c -static -s -o wak -lm
+gcc -Os -funsigned-char -std=c99 -Wall -Wextra -W -Wpointer-arith -Wstrict-prototypes -pedantic  -D_POSIX_C_SOURCE=200809L  wak.c -static -s -o wak -lm
 ```
 or
 ```
-gcc -Os -funsigned-char -std=gnu99 -Wall -Wextra -W -Wpointer-arith -Wstrict-prototypes -pedantic  mono.c -static -s -o wak -lm
+gcc -Os -funsigned-char -std=gnu99 -Wall -Wextra -W -Wpointer-arith -Wstrict-prototypes -pedantic  wak.c -static -s -o wak -lm
 ```
 or, if you have `musl` installed, you can get much smaller binaries with:
 ```
-musl-gcc -Os -funsigned-char -std=c99 -Wall -Wextra -W -Wpointer-arith -Wstrict-prototypes -pedantic -D_POSIX_C_SOURCE=200809L mono.c -static -s -o wak
+musl-gcc -Os -funsigned-char -std=c99 -Wall -Wextra -W -Wpointer-arith -Wstrict-prototypes -pedantic -D_POSIX_C_SOURCE=200809L wak.c -static -s -o wak
 ```
 or
 ```
-musl-gcc -Os -funsigned-char -std=gnu99 -Wall -Wextra -W -Wpointer-arith -Wstrict-prototypes -pedantic mono.c -static -s -o wak
+musl-gcc -Os -funsigned-char -std=gnu99 -Wall -Wextra -W -Wpointer-arith -Wstrict-prototypes -pedantic wak.c -static -s -o wak
 ```
 
-Also, you can compile this with TCC (Tiny C Compiler, aka tcc) or run it as a script! Install the version maintained at https://repo.or.cz/w/tinycc.git, or the unofficial mirror which is at https://github.com/TinyCC/tinycc, and put this line at the top of the `mono.c` file:
+Also, you can compile this with TCC (Tiny C Compiler, aka tcc) or run it as a script! Install the version maintained at https://repo.or.cz/w/tinycc.git, or the unofficial mirror which is at https://github.com/TinyCC/tinycc, and put this line at the top of the `wak.c` file:
 ```
 #!/usr/local/bin/tcc -run -funsigned-char
 ```
