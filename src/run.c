@@ -426,28 +426,28 @@ static void push_field(int fnum)
 // Random number generator
 // Extracted from http://www.cs.ucl.ac.uk/staff/d.jones/GoodPracticeRNG.pdf
 // modified to encapsulate state and add seed function.
-static struct jkiss32_state {
-  unsigned x, y, z, w, c;
-} jkst = {123456789, 234567891, 345678912, 456789123, 0};
+static struct jkiss_state {
+  unsigned x, y, z, c;
+} jkst = {123456789, 987654321, 43219876, 6543217}; /* Seed variables */
 
-static unsigned jkiss32(void)
+static unsigned int jkiss(void)
 {
-  int t;
-  jkst.y ^= (jkst.y<<5); jkst.y ^= (jkst.y>>7); jkst.y ^= (jkst.y<<22);
-  t = jkst.z+jkst.w+jkst.c; jkst.z = jkst.w; jkst.c = t<0; jkst.w = t&2147483647;
-  jkst.x += 1411392427;
-  return jkst.x + jkst.y + jkst.w;
+  unsigned long long t;
+  jkst.x = 314527869 * jkst.x + 1234567;
+  jkst.y ^= jkst.y << 5; jkst.y ^= jkst.y >> 7; jkst.y ^= jkst.y << 22;
+  t = 4294584393ULL * jkst.z + jkst.c; jkst.c = t >> 32; jkst.z = t;
+  return jkst.x + jkst.y + jkst.z;
 }
 
-static void seed_jkiss32(unsigned n)
+static void seed_jkiss(unsigned n)
 {
-  if (!n) n = 1;
-  jkst = (struct jkiss32_state){n*123456789, n*234567891, n*345678912, n*456789123, 0};
-  if (n > 1) for (n = 10000; n--;) jkiss32();
+  jkst = (struct jkiss_state){123456789 ^ (n&0xFF000000),
+    987654321 ^ (n&0xFF0000), 43219876 ^ (n&0xFF00), 6543217 ^ (n&0xFF)};
+  for (n = 10000; n--;) jkiss();
 }
 // END Random number generator
-#define random(x) (jkiss32(x) >> 1)
-#define srandom(x) seed_jkiss32(x)
+#define random(x) (jkiss(x) >> 1)
+#define srandom(x) seed_jkiss(x)
 #endif  // FOR_TOYBOX
 static double seedrand(double seed)
 {
