@@ -1,0 +1,155 @@
+.\" ========================================================
+.TH WAK 1 "2024-11-04" "24.10 20241008"
+.\" ========================================================
+.SH NAME
+wak \(em an implementation of the awk programming language
+.\" ========================================================
+.SH SYNOPSIS
+.B wak
+[
+.BR \-F
+sepstring
+] [
+.BR \-v
+assignment
+]... program [ argument... ]
+.br
+or
+.br
+.B wak
+[
+.BR \-F
+sepstring
+]
+.BR \-f
+progfile
+[
+.BR \-f
+progfile
+]...
+.br
+.ti 20n
+[
+.BR \-v
+assignment
+]... [ argument... ]
+.br
+also:
+.br
+[
+.BR \-V ,
+.B \-\^\-\^version
+]
+[
+.BR \-h ,
+.B \-\^\-\^help
+]
+[
+.BR \-b
+]
+[
+.BR \-c
+]
+.\" ========================================================
+.SH DESCRIPTION
+.B wak
+is an implementation of the awk programming language,
+primarily as described by POSIX.1-2024 (also known as
+IEEE Std 1003.1\[tm]-2024 Edition and
+The Open Group Standard Base Specifications, Issue 8),
+with a few omissions and additions.
+.PP
+This document does not attempt to describe the awk language.
+The POSIX specification may be seen at
+https://pubs.opengroup.org/onlinepubs/9799919799/utilities/awk.html .
+Please consult that document for a complete description.
+.\" ========================================================
+.SH OPTIONS
+.TP +15n
+.BR \-F \ sepstring
+Input field separator; may be a regular expression
+.TP
+.BR \-v \ assignment
+An assignment expression of the form var=string_value; the
+assignment precedes the start of execution of the program. The
+right-hand side is taken as a string.
+.TP
+.BR \-f \ progfile
+Pathname of an awk program file. More than one program file may be
+specified, treated as if concatenated.
+.TP
+.BR \-V ,\  \-\^\-\^version
+Display the program version and exit successfully.
+.TP
+.BR \-h ,\  \-\^\-\^help
+Display a brief help screen and exit successfully.
+.TP
+.BR \-b
+Treat input files as bytes rather than UTF-8 characters. (This
+option is experimental.)
+.TP
+.BR \-c
+Compile the program to internal format but do not execute.  Can be
+used to check for syntax errors without running the program.
+.TP
+.B program
+If no
+.B -f
+options are supplied, the first non-option argument is taken to be a
+string that contains an entire awk program, usually used for short
+awk programs that can be entered in a single line.  Only one such
+program may be used in this command format.
+.TP
+.B argument
+Remaining arguments are taken as input files to the awk program, or
+as assignments of the form var=string_value.
+.\" ========================================================
+.SH DIFFERENCES FROM POSIX AWK
+.B wak
+is intended to conform to the POSIX awk specification with some
+omissions and additions. The major omission is locale support. The
+program attempts to set its locale's LC_CTYPE to a UTF-8 locale if
+it is not already set as such, and uses the native mumeric locale,
+but otherwise does not use the LC_* locale settings.
+.PP
+The major addition is the use of (extended) regular expressions as
+values of RS, the record separator special variable. This is an
+extension common to nearly all awk implementations, including the
+extension common to nearly all awk implementations, including gawk,
+mawk, and the original (Unix) "One True Awk" (current version).
+.PP
+.\" ========================================================
+.SH BUGS
+This is a recent implementation, and as such, there are probably
+quite a few bugs. Please report any bugs you find to
+raygard at gmail dot com.
+.\" ========================================================
+.SH AUTHORS
+Written by Ray Gardner, with contributions from Oliver K. Webb.
+.\" ========================================================
+.SH COPYRIGHT
+Copyright 2024 Ray Gardner
+.br
+Released under the 0BSD license:
+.br
+Permission to use, copy, modify, and/or distribute this software for any
+purpose with or without fee is hereby granted.
+.br
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+.\" ========================================================
+.SH MISCELLANEOUS
+Feel free to rename
+.B wak
+to awk if that does not conflict with your current installation
+environment.
+.PP
+.B wak
+is not as fast as mawk and not as full-featured as gawk, and is not
+intended as a replacement or competitor to either, or to any other
+implementation.
