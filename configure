@@ -1,2 +1,122 @@
 #! /bin/sh -
-echo Temporary no-op for a real configure script...
+#
+# configure script for wak (awk implementation)
+#
+# This script writes a Makefile for wak, allowing
+# a little control over 'prefix', 'CC', 'CFLAGS'
+
+# For security
+IFS='
+ 	'
+OLDPATH="$PATH"
+PATH=/bin:/usr/bin
+export PATH
+
+version='wak configure 24.10 20241008'
+
+# Default values
+prefix=${prefix-/usr/local}
+CC=${CC-gcc}
+CFLAGS=${CFLAGS--O3 -funsigned-char -std=c99 -Wall -Wextra -W -Wpointer-arith -Wstrict-prototypes -D_POSIX_C_SOURCE=200809L }
+
+help() {
+    echo "'configure' configures $version"
+    echo
+    echo Usage: ./configure [OPTION]... [VAR=VALUE]...
+    echo
+    echo 'To assign environment variables (e.g., CC, CFLAGS...), specify them as'
+    echo VAR=VALUE, e.g. \'CC=clang\'
+    echo
+    echo Option defaults are shown in brackets.
+    echo
+    echo Configuration:
+    echo '  -h, --help              display this help and exit'
+    echo '  -V, --version           display version information and exit'
+    echo
+    echo Installation directory:
+    echo '  --prefix=PREFIX        install architecture-independent files in PREFIX'
+    echo '                         [/usr/local]'
+    echo \'make install\' will install to /usr/local/bin etc. by default.
+    echo Use e.g. \'--prefix=\$HOME\' to change this.
+    echo
+    echo   with no options, configure these defaults:
+    show_defaults
+    exit 0
+}
+
+show_defaults() {
+    echo prefix=${prefix-/usr/local}
+    echo CC=${CC-gcc}
+    echo CFLAGS=${CFLAGS--O3 -funsigned-char -std=c99 -Wall -Wextra -W -Wpointer-arith -Wstrict-prototypes -D_POSIX_C_SOURCE=200809L }
+}
+
+error() {
+    echo "$@" 1>&2
+    exit 1
+}
+
+check_eq_arg() {
+    # Ensure exactly one = sign, non-empty optval
+    if [ x${arg##*=*=} != x${arg} ] || [ x${arg##*=} = x${arg} ] || [ -z $optval ]
+    then
+        error 'Bad arg:' ${arg}
+    fi
+}
+
+make_makefile() {
+    sed -e "s?@prefix@?${prefix}?g"   \
+        -e "s?@CC@?${CC}?g"           \
+        -e "s?@CFLAGS@?${CFLAGS}?g"   \
+        < Makefile.in > Makefile
+}
+
+if [ $# = 0 ]
+then
+    echo 'No args; using this config (--help to show options):'
+    show_defaults
+    make_makefile
+    exit 0
+fi
+
+while [ $# != 0 ]
+do
+    arg=$1
+    option=${arg%=*} # arg up to an = (if any)
+    optval=${arg#*=} # arg following = (if any)
+    if [ -z $option ]
+    then
+        error 'Bad arg:' $1
+    fi
+    case $option in
+        '--?' | '-?' | --h | --he | --hel | --help | -h | -he | -hel | -help)
+            help
+            ;;
+        --v | --ve | --ver | --vers | --versi | --versio | --version | -v | -ve | -ver | -vers | -versi | -versio | -version | -V)
+            echo $version
+            exit 0
+            ;;
+        '--prefix')
+            check_eq_arg
+            prefix=$optval
+            ;;
+        'CC')
+            check_eq_arg
+            CC=$optval
+            ;;
+        'CFLAGS')
+            check_eq_arg
+            CFLAGS=$optval
+            ;;
+        -*)
+            error Bad option arg: $1
+            ;;
+        *)
+            error Bad arg: $1
+            ;;
+    esac
+    shift
+done
+
+make_makefile
+
+exit 0
