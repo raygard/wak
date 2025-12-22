@@ -109,12 +109,11 @@ as assignments of the form var=string_value.
 is intended to conform to the POSIX awk specification with some
 omissions and additions. The major omission is locale support. The
 program attempts to set its locale's LC_CTYPE to a UTF-8 locale if
-it is not already set as such, and uses the native mumeric locale,
+it is not already set as such, and uses the native numeric locale,
 but otherwise does not use the LC_* locale settings.
 .PP
 The major addition is the use of (extended) regular expressions as
 values of RS, the record separator special variable. This is an
-extension common to nearly all awk implementations, including the
 extension common to nearly all awk implementations, including gawk,
 mawk, and the original (Unix) "One True Awk" (current version).
 .PP
