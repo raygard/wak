@@ -93,6 +93,10 @@ toy: ./toybox/awk
 clean:
 	-rm wak prwak aswak mwak muwak mmuwak
 
+# This works on my system:
+./wak.pdf:
+	man -l -Tps ./wak.man | ps2pdf - $@
+
 install: ./wak
 	mkdir -p $(DESTDIR)$(prefix)/bin
 	cp $? $(DESTDIR)$(prefix)/bin/
