@@ -3,10 +3,10 @@
 .POSIX:
 #.SILENT:
 
-.PHONY: clean all allplus mono win windows toy help
+.PHONY: install uinstall clean all mono win windows toy help\
+          extra musl check test check-wak
 
 prefix ?= @prefix@
-DESTDIR ?=
 
 CC = @CC@
 
@@ -98,12 +98,12 @@ clean:
 	man -l -Tps ./wak.man | ps2pdf - $@
 
 install: ./wak
-	mkdir -p $(DESTDIR)$(prefix)/bin
-	cp $? $(DESTDIR)$(prefix)/bin/
-	chmod 775 $(DESTDIR)$(prefix)/bin/wak
+	mkdir -p $(prefix)/bin
+	cp $? $(prefix)/bin/
+	chmod 775 $(prefix)/bin/wak
 
 uninstall: ./wak
-	for i in $?; do rm $(DESTDIR)$(prefix)/bin/$$i; done
+	for i in $?; do rm $(prefix)/bin/$$i; done
 
 check test: check-wak
 
