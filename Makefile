@@ -102,6 +102,9 @@ install: ./wak
 	cp $? $(DESTDIR)$(prefix)/bin/
 	chmod 775 $(DESTDIR)$(prefix)/bin/wak
 
+uninstall: ./wak
+	for i in $?; do rm $(DESTDIR)$(prefix)/bin/$$i; done
+
 check test: check-wak
 
 # tests from gawk test set passed by gawk and nawk
