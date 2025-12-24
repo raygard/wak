@@ -8,7 +8,8 @@ BEGIN {
 	c["\t"] = "\\t"
 	c["\v"] = "\\v"
 
-	sort = "sort"
+  # 20251224 rdg  Force sort to use byte-order sorting
+	sort = "LC_ALL=C sort"
 
 	for (i in c)
 		printf("%s %s [[:space:]]\n", c[i],
