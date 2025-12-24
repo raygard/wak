@@ -12,19 +12,19 @@ OLDPATH="$PATH"
 PATH=/bin:/usr/bin
 export PATH
 
-version='wak configure 24.10 20241008'
+version='wak configure 25.12 20251223'
 
 # Default values
 prefix=${prefix-/usr/local}
 CC=${CC-gcc}
-CFLAGS=${CFLAGS--O3 -funsigned-char -std=c99 -Wall -Wextra -W -Wpointer-arith -Wstrict-prototypes -D_POSIX_C_SOURCE=200809L }
+CFLAGS=${CFLAGS-'-O3 -funsigned-char -std=c99 -Wall -Wextra -W -Wpointer-arith -Wstrict-prototypes -D_POSIX_C_SOURCE=200809L'}
 
 help() {
     echo "'configure' configures $version"
     echo
     echo Usage: ./configure [OPTION]... [VAR=VALUE]...
     echo
-    echo 'To assign environment variables (e.g., CC, CFLAGS...), specify them as'
+    echo 'To assign environment variables (CC, CFLAGS), specify them as'
     echo VAR=VALUE, e.g. \'CC=clang\'
     echo
     echo Option defaults are shown in brackets.
@@ -45,9 +45,10 @@ help() {
 }
 
 show_defaults() {
-    echo prefix=${prefix-/usr/local}
-    echo CC=${CC-gcc}
-    echo CFLAGS=${CFLAGS--O3 -funsigned-char -std=c99 -Wall -Wextra -W -Wpointer-arith -Wstrict-prototypes -D_POSIX_C_SOURCE=200809L }
+    echo Using this config:
+    echo prefix=${prefix}
+    echo CC=${CC}
+    echo CFLAGS=${CFLAGS}
 }
 
 error() {
@@ -55,15 +56,8 @@ error() {
     exit 1
 }
 
-check_eq_arg() {
-    # Ensure exactly one = sign, non-empty optval
-    if [ x${arg##*=*=} != x${arg} ] || [ x${arg##*=} = x${arg} ] || [ -z $optval ]
-    then
-        error 'Bad arg:' ${arg}
-    fi
-}
-
 make_makefile() {
+    show_defaults
     sed -e "s?@prefix@?${prefix}?g"   \
         -e "s?@CC@?${CC}?g"           \
         -e "s?@CFLAGS@?${CFLAGS}?g"   \
@@ -72,8 +66,8 @@ make_makefile() {
 
 if [ $# = 0 ]
 then
-    echo 'No args; using this config (--help to show options):'
-    show_defaults
+    echo 'No args; use defaults (--help to show options):'
+    #show_defaults
     make_makefile
     exit 0
 fi
@@ -81,8 +75,10 @@ fi
 while [ $# != 0 ]
 do
     arg=$1
-    option=${arg%=*} # arg up to an = (if any)
+    option=${arg%%=*} # arg up to an = (if any)
     optval=${arg#*=} # arg following = (if any)
+    #echo option:${option}:
+    #echo optval:${optval}:
     if [ -z $option ]
     then
         error 'Bad arg:' $1
@@ -96,15 +92,12 @@ do
             exit 0
             ;;
         '--prefix')
-            check_eq_arg
             prefix=$optval
             ;;
         'CC')
-            check_eq_arg
             CC=$optval
             ;;
         'CFLAGS')
-            check_eq_arg
             CFLAGS=$optval
             ;;
         -*)

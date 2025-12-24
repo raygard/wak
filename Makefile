@@ -12,7 +12,7 @@ CC = gcc
 
 MUSLCC = /usr/local/musl/bin/musl-gcc
 
-CFLAGS = -O3 -funsigned-char -std=c99 -Wall -Wextra -W -Wpointer-arith -Wstrict-prototypes -D_POSIX_C_SOURCE=200809L 
+CFLAGS = -O3 -funsigned-char -std=c99 -Wall -Wextra -W -Wpointer-arith -Wstrict-prototypes -D_POSIX_C_SOURCE=200809L
 
 # Order is significant for monolithic source wak.c and toybox awk!
 SRC = ./src/lib.c ./src/common.c ./src/scan.c ./src/compile.c ./src/run.c ./src/main.c
