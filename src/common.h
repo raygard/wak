@@ -40,6 +40,7 @@ extern char **environ;    // needed outside toybox with gcc ?
 // https://www.msys2.org/wiki/Porting/
 #if !(defined(__unix__) || defined(linux))
 #  define __USE_MINGW_ANSI_STDIO            1
+ssize_t getline(char **lineptr, size_t *n, FILE *stream);
 #endif
 
 #endif  // FOR_TOYBOX
@@ -343,19 +344,18 @@ struct zmap {
 
 #define NO_EXIT_STATUS  (9999987)  // value unlikely to appear in exit stmt
 
-ssize_t getline(char **lineptr, size_t *n, FILE *stream);
-ssize_t getdelim(char ** restrict lineptr, size_t * restrict n, int delimiter, FILE *stream);
-
 #define EXTERN extern
 #ifndef FOR_TOYBOX
 
 // Common (global) data
-EXTERN struct global_data TT;
 struct optflags {
   char FLAG_b;
 };
-EXTERN struct optflags optflags;
 #define FLAG(x) (optflags.FLAG_##x)
+#ifndef MONOLITHIC
+EXTERN struct optflags optflags;
+EXTERN struct global_data TT;
+#endif // MONOLITHIC
 #endif  // FOR_TOYBOX
 
 #ifndef MONOLITHIC

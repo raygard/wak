@@ -1,5 +1,21 @@
 # Changelog
 
+
+## 2026-04-03
+- Fix dup struct defs and remove getdelim() decl in common.h
+
+## 2025-12-24
+- Force sort in spacere.awk to ignore locale
+
+## 2025-12-23
+- Add uninstall target to Makefile[.in] (from equwal)
+- Clean up Makefile[.in], configure
+
+## 2025-12-22
+- Changes suggested by Arnold Robbins:
+- Fix typos in wak.man / wak.pdf
+- Make 'configure' executable
+
 ## 2024-11-06
 - Add getline.c for Windows (msys) build
 - Add man page, configure script, Makefile.in
