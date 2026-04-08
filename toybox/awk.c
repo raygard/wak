@@ -762,7 +762,7 @@ static int get_char(void)
     // FIXME TODO or check for error? feof() vs. ferror()
     fclose(TT.scs->fp);
     TT.scs->fp = 0;
-    TT.scs->p = &("  "[2]);   // Quiet clang warning on "  " + 2;
+    TT.scs->p = "  " + 2;
     if (!TT.scs->prog_args) {
       xfree(TT.scs->line);
       if (lastchar == '\n') return EOF;
@@ -4532,7 +4532,7 @@ static void run(int optind, int argc, char **argv, char *sepstring,
 
 static void progfiles_init(char *progstring, struct arg_list *prog_args)
 {
-  TT.scs->p = progstring ? progstring : &("  "[2]);   // Quiet clang warning on "  " + 2;
+  TT.scs->p = progstring ? progstring : "  " + 2;
   TT.scs->progstring = progstring;
   TT.scs->prog_args = prog_args;
   TT.scs->filename = "(cmdline)";

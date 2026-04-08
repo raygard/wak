@@ -2,6 +2,8 @@
 
 
 ## 2026-04-03
+These changes bring the github version of toybox/awk.c in line with what is currently in toybox (now at https://codeberg.org/landley/toybox)
+- Mod Makefile[.in] to revert change in toybox that suppressed warning with clang (per R. Landley)
 - Fix dup struct defs and remove getdelim() decl in common.h
 
 ## 2025-12-24

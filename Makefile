@@ -86,9 +86,12 @@ win windows: ./wak.exe
 
 toy: ./toybox/awk
 
+# sed here reverts change made for clang warning about "string" + int
+# toybox maintainer R. Landley prefers "string" + int over &("string"[int])
 ./toybox/awk: ./onefile/wak.c
 	@mkdir -p $(@D)
-	awk -f ./scripts/make_toybox_awk.awk ./onefile/wak.c > $@.c
+	awk -f ./scripts/make_toybox_awk.awk ./onefile/wak.c | \
+		sed -e 's/\&(\("[^"]*"\)\[\([^]]*\)\]);.*/\1 + \2;/' > $@.c
 
 clean:
 	-rm wak prwak aswak mwak muwak mmuwak
