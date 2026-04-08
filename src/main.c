@@ -10,7 +10,7 @@
 ////////////////////
 
 #ifndef FOR_TOYBOX
-char *version = "24.10 20241008";
+char *version = "26.04 20260405";
 
 #endif  // FOR_TOYBOX
 static void progfiles_init(char *progstring, struct arg_list *prog_args)
@@ -115,7 +115,6 @@ int main(int argc, char **argv)
       case 'h':
         printf("%s", usage);
         exit(0);
-        break;
         break;
       default:
         error_exit("Option error.\n%s", usage);

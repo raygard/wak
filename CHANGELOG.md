@@ -1,6 +1,9 @@
 # Changelog
 
 
+## 2026-04-05
+- Remove superfluous break from main.c; update version
+
 ## 2026-04-03
 These changes bring the github version of toybox/awk.c in line with what is currently in toybox (now at https://codeberg.org/landley/toybox)
 - Mod Makefile[.in] to revert change in toybox that suppressed warning with clang (per R. Landley)
