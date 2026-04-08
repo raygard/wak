@@ -103,9 +103,9 @@ EXTERN int utf8towc(unsigned *wc, char *str, unsigned len)
   char *s, c;
 
   // fast path ASCII
-  if (len && *str<128) return !!(*wc = *str);
+  if (len && (0xff & *str) < 128) return !!(*wc = *str);
 
-  result = first = *(s = str++);
+  result = first = 0xff & *(s = str++);
   if (result<0xc2 || result>0xf4) return -1;
   for (mask = 6; (first&0xc0)==0xc0; mask += 5, first <<= 1) {
     if (!--len) return -2;

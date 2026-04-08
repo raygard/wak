@@ -736,7 +736,7 @@ static int get_char(void)
   static char *nl = "\n";
   // On first entry, TT.scs->p points to progstring if any, or null string.
   for (;;) {
-    int c = *(TT.scs->p)++;
+    int c = 0xff & *(TT.scs->p)++;
     if (c) {
       return c;
     }
@@ -2531,9 +2531,9 @@ static char *escape_str(char *s, int is_regex)
         c = c * 8 + *s++ - '0';
       *to++ = c;
     } else if (*s == 'x') {
-      if (isxdigit(s[1])) {
+      if (isxdigit(0xff & s[1])) {
         int c = hexval(*++s);
-        if (isxdigit(s[1])) c = c * 16 + hexval(*++s);
+        if (isxdigit(0xff & s[1])) c = c * 16 + hexval(*++s);
         *to++ = c, s++;
       }
     } else {
@@ -2748,7 +2748,7 @@ static int splitter(void (*setter)(struct zmap *, int, char *, size_t), struct z
   // split("", a, "x") splits to a 1-element (empty element) array
   if (!*s || (IS_STR(zvfs) && !*fs) || IS_EMPTY_RX(zvfs)) {
     while (*s) {
-      if (*s < 128) setter(m, ++nf, s++, 1);
+      if ((0xff & *s) < 128) setter(m, ++nf, s++, 1);
       else {        // Handle UTF-8
         char cbuf[8];
         unsigned wc;

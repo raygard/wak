@@ -2,6 +2,7 @@
 
 
 ## 2026-04-05
+- Obviate need for compiling with -funsigned-char
 - Remove superfluous break from main.c; update version
 
 ## 2026-04-03

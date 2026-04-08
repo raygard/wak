@@ -33,7 +33,7 @@ static int get_char(void)
   static char *nl = "\n";
   // On first entry, TT.scs->p points to progstring if any, or null string.
   for (;;) {
-    int c = *(TT.scs->p)++;
+    int c = 0xff & *(TT.scs->p)++;
     if (c) {
       return c;
     }

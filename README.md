@@ -27,26 +27,26 @@ These files compile on my machine with `gcc 13.2.0` and `clang 19.1.0`. The buil
 
 You can also just compile the `onefile/wak.c` version in Linux:
 ```
-gcc -Os -funsigned-char -std=c99 -Wall -Wextra -W -Wpointer-arith -Wstrict-prototypes -pedantic  -D_POSIX_C_SOURCE=200809L  wak.c -static -s -o wak -lm
+gcc -Os -std=c99 -Wall -Wextra -W -Wpointer-arith -Wstrict-prototypes -pedantic  -D_POSIX_C_SOURCE=200809L  wak.c -static -s -o wak -lm
 ```
 or
 ```
-gcc -Os -funsigned-char -std=gnu99 -Wall -Wextra -W -Wpointer-arith -Wstrict-prototypes -pedantic  wak.c -static -s -o wak -lm
+gcc -Os -std=gnu99 -Wall -Wextra -W -Wpointer-arith -Wstrict-prototypes -pedantic  wak.c -static -s -o wak -lm
 ```
 or, if you have `musl` installed, you can get much smaller binaries with:
 ```
-musl-gcc -Os -funsigned-char -std=c99 -Wall -Wextra -W -Wpointer-arith -Wstrict-prototypes -pedantic -D_POSIX_C_SOURCE=200809L wak.c -static -s -o wak
+musl-gcc -Os -std=c99 -Wall -Wextra -W -Wpointer-arith -Wstrict-prototypes -pedantic -D_POSIX_C_SOURCE=200809L wak.c -static -s -o wak
 ```
 or
 ```
-musl-gcc -Os -funsigned-char -std=gnu99 -Wall -Wextra -W -Wpointer-arith -Wstrict-prototypes -pedantic wak.c -static -s -o wak
+musl-gcc -Os -std=gnu99 -Wall -Wextra -W -Wpointer-arith -Wstrict-prototypes -pedantic wak.c -static -s -o wak
 ```
 
 Also, you can compile this with TCC (Tiny C Compiler, aka tcc) or run it as a script! Install the version maintained at https://repo.or.cz/w/tinycc.git, or the unofficial mirror which is at https://github.com/TinyCC/tinycc, and put this line at the top of the `wak.c` file:
 ```
-#!/usr/local/bin/tcc -run -funsigned-char
+#!/usr/local/bin/tcc -run
 ```
-(Note it will not run correctly without `-funsigned-char`.) Thank you @davidar for this tip!
+Thank you @davidar for this tip!
 
 #### A note on the test suite
 
