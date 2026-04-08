@@ -2,6 +2,7 @@
 
 
 ## 2026-04-05
+- Simplify locale handling in main.c
 - Obviate need for compiling with -funsigned-char
 - Remove superfluous break from main.c; update version
 
