@@ -1,7 +1,8 @@
 # Changelog
 
 
-## 2026-04-05
+## 2026-04-09
+- Compile RS regex only when RS changes, not on every record read. Reads files more than twice as fast as before.
 - Simplify locale handling in main.c
 - Obviate need for compiling with -funsigned-char
 - Remove superfluous break from main.c; update version

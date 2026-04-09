@@ -193,9 +193,8 @@ struct global_data {
   struct zfile *zfiles, *cfile, *zstdout;
   regex_t rx_printf_fmt;
 
-#define RS_MAX  64
-  char rs_last[RS_MAX];
-  regex_t rx_rs_default, rx_rs_last;
+  regex_t rx_rs;
+  struct zstring *xrs;
 };
 #endif  // FOR_TOYBOX
 enum toktypes {

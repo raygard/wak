@@ -118,9 +118,8 @@ GLOBALS(
   struct zvalue *stackp;  // top of stack ptr
 
   char *pbuf;   // Used for number formatting in num_to_zstring()
-#define RS_MAX  64
-  char rs_last[RS_MAX];
-  regex_t rx_rs_default, rx_rs_last;
+  regex_t rx_rs;
+  struct zstring *xrs;
   regex_t rx_default, rx_last, rx_printf_fmt;
 #define FS_MAX  64
   char fs_last[FS_MAX];

@@ -182,9 +182,8 @@ struct global_data {
   struct zfile *zfiles, *cfile, *zstdout;
   regex_t rx_printf_fmt;
 
-#define RS_MAX  64
-  char rs_last[RS_MAX];
-  regex_t rx_rs_default, rx_rs_last;
+  regex_t rx_rs;
+  struct zstring *xrs;
 };
 #endif  // FOR_TOYBOX
 enum toktypes {
@@ -2770,9 +2769,6 @@ static struct zvalue *to_str(struct zvalue *v)
   return to_str_fmt(v, CONVFMT);
 }
 
-// TODO FIXME Is this needed? (YES -- investigate) Just use to_str()?
-#define ENSURE_STR(v) (IS_STR(v) ? (v) : to_str(v))
-
 static void rx_zvalue_compile(regex_t **rx, struct zvalue *pat)
 {
   if (IS_RX(pat)) *rx = pat->rx;
@@ -2917,7 +2913,7 @@ static int splitter(void (*setter)(struct zmap *, int, char *, size_t), struct z
 {
   regex_t *rx;
   regoff_t offs, end;
-  int multiline_null_rs = !ENSURE_STR(&STACK[RS])->vst->str[0];
+  int multiline_null_rs = !to_str(&STACK[RS])->vst->str[0];
   int nf = 0, r = 0, eflag = 0;
   int one_char_fs = 0;
   char *s0 = s, *fs = "";
@@ -3527,17 +3523,22 @@ static int next_fp(void)
   return 1;
 }
 
-static int rx_find_rs(regex_t *rx, char *s, long len,
-                      regoff_t *start, regoff_t *end, int one_byte_rs)
+static int rx_find_rs(char *s, long len, regoff_t *start, regoff_t *end)
 {
   regmatch_t matches[1];
-  if (one_byte_rs) {
-    char *p = memchr(s, one_byte_rs, len);
+  char *rs = to_str(&STACK[RS])->vst->str;
+  if (strcmp(rs, TT.xrs->str)) {
+    TT.xrs = zstring_copy(TT.xrs, STACK[RS].vst);
+    regfree(&TT.rx_rs);
+    xregcomp(&TT.rx_rs, rs[0] ? rs: "\n\n+", REG_EXTENDED);
+  }
+  if (*rs && !rs[1]) {
+    char *p = memchr(s, *rs, len);
     if (!p) return REG_NOMATCH;
     *start = p - s;
     *end = *start + 1;
   } else {
-    int r = regexec0(rx, s, len, 1, matches, 0);
+    int r = regexec0(&TT.rx_rs, s, len, 1, matches, 0);
     if (r == REG_NOMATCH) return r;
     if (r) FATAL("regexec error");  // TODO ? use regerr() to meaningful msg
     *start = matches[0].rm_so;
@@ -3548,24 +3549,19 @@ static int rx_find_rs(regex_t *rx, char *s, long len,
 
 // get a record; return length, or -1 at EOF
 // Does work for getrec_f() for regular RS or multiline
-static ssize_t getr(struct zfile *zfp, int rs_mode)
+static ssize_t getr(struct zfile *zfp)
 {
   // zfp->buf (initially null) points to record buffer
   // zfp->buflen -- size of allocated buf
   // TT.rgl.recptr -- points to where record is being / has been read into
   // zfp->ro -- offset in buf to record data
   // zfp->lim -- offset to 1+last byte read in buffer
-  // rs_mode nonzero iff multiline mode; reused for one-byte RS
 
-  regex_t rsrx; // FIXME Need to cache and avoid rx compile on every record?
   long ret = -1;
   int r = -REG_NOMATCH;   // r cannot have this value after rx_findx() below
   regoff_t so = 0, eo = 0;
   size_t m = 0, n = 0;
 
-  xregcomp(&rsrx, rs_mode ? "\n\n+" : fmt_one_char_fs(STACK[RS].vst->str),
-      REG_EXTENDED);
-  rs_mode = strlen(STACK[RS].vst->str) == 1 ? STACK[RS].vst->str[0] : 0;
   for ( ;; ) {
     if (zfp->ro == zfp->lim && zfp->eof) break; // EOF & last record; return -1
 
@@ -3588,7 +3584,7 @@ static ssize_t getr(struct zfile *zfp, int rs_mode)
       zfp->buf[zfp->lim] = 0;
     }
     TT.rgl.recptr = zfp->buf + zfp->ro;
-    r = rx_find_rs(&rsrx, TT.rgl.recptr, zfp->lim - zfp->ro, &so, &eo, rs_mode);
+    r = rx_find_rs(TT.rgl.recptr, zfp->lim - zfp->ro, &so, &eo);
     if (!r && so == eo) r = 1;  // RS was empty, so fake not found
 
     if (!zfp->eof && (r
@@ -3615,7 +3611,6 @@ static ssize_t getr(struct zfile *zfp, int rs_mode)
       break;
     } // RS not found AND is_tty; loop to keep reading
   }
-  regfree(&rsrx);
   return ret;
 }
 
@@ -3623,16 +3618,16 @@ static ssize_t getr(struct zfile *zfp, int rs_mode)
 static ssize_t getrec_f(struct zfile *zfp)
 {
   int k;
-  if (ENSURE_STR(&STACK[RS])->vst->str[0]) return getr(zfp, 0);
+  if (to_str(&STACK[RS])->vst->str[0]) return getr(zfp);
   // RS == "" so multiline read
-  // Passing 1 to getr() forces multiline mode, which uses regex "\n\n+" to
+  // Multiline mode uses regex "\n\n+" to
   // split on sequences of 2 or more newlines. But that's not the same as
   // multiline mode, which never returns empty records or records with leading
   // or trailing newlines, which can occur with RS="\n\n+". So here we loop and
   // strip leading/trailing newlines and discard empty lines. See gawk manual,
   // "4.9 Multiple-Line Records" for info on this difference.
   do {
-    k = getr(zfp, 1);
+    k = getr(zfp);
     if (k < 0) break;
     while (k && TT.rgl.recptr[k-1] == '\n') k--;
     while (k && TT.rgl.recptr[0] == '\n') k--, TT.rgl.recptr++;
@@ -4053,7 +4048,7 @@ static int interpx(int start, int *status)
           zvalue_release_zstring(&tempv);
           drop_n(nargs);
         }
-        fputs(ENSURE_STR(&STACK[ORS])->vst->str, outfp->fp);
+        fputs(to_str(&STACK[ORS])->vst->str, outfp->fp);
         break;
 
       case opdrop:
@@ -4593,7 +4588,8 @@ static int interp(int start, int *status)
 
 static void insert_argv_map(struct zvalue *map, int key, char *value)
 {
-  struct zvalue zkey = ZVINIT(ZF_STR, 0, num_to_zstring(key, ENSURE_STR(&STACK[CONVFMT])->vst->str));
+  struct zvalue zkey =
+    ZVINIT(ZF_STR, 0, num_to_zstring(key, to_str(&STACK[CONVFMT])->vst->str));
   struct zvalue *v = get_map_val(map, &zkey);
   zvalue_release_zstring(&zkey);
   zvalue_release_zstring(v);
@@ -4712,11 +4708,13 @@ static void run(int optind, int argc, char **argv, char *sepstring,
     struct arg_list *assign_args)
 {
   char *printf_fmt_rx = "%[-+ #0']*([*]|[0-9]*)([.]([*]|[0-9]*))?l?[aAdiouxXfFeEgGcs%]";
-  init_globals(optind, argc, argv, sepstring, assign_args);
-  TT.cfile = xzalloc(sizeof(struct zfile));
+  xregcomp(&TT.rx_printf_fmt, printf_fmt_rx, REG_EXTENDED);
+  xregcomp(&TT.rx_rs, "[\n]", REG_EXTENDED);
+  TT.xrs = new_zstring("\n", 1);
   xregcomp(&TT.rx_default, "[ \t\n]+", REG_EXTENDED);
   xregcomp(&TT.rx_last, "[ \t\n]+", REG_EXTENDED);
-  xregcomp(&TT.rx_printf_fmt, printf_fmt_rx, REG_EXTENDED);
+  init_globals(optind, argc, argv, sepstring, assign_args);
+  TT.cfile = xzalloc(sizeof(struct zfile));
   new_file("-", stdin, 'r', 1, 1);
   new_file("/dev/stdin", stdin, 'r', 1, 1);
   new_file("/dev/stdout", stdout, 'w', 1, 1);
@@ -4728,9 +4726,10 @@ static void run(int optind, int argc, char **argv, char *sepstring,
   if (r != tkexit)
     if (TT.cgl.first_recrule) run_files(&status);
   if (TT.cgl.first_end) r = interp(TT.cgl.first_end, &status);
-  regfree(&TT.rx_printf_fmt);
   regfree(&TT.rx_default);
   regfree(&TT.rx_last);
+  regfree(&TT.rx_rs);
+  regfree(&TT.rx_printf_fmt);
   free_literal_regex();
   close_file(0);    // close all files
   if (status >= 0) awk_exit(status);
