@@ -1,5 +1,10 @@
 ## wak
 
+### News 2026-04-10
+I made some changes recently to speed up file reading, at least in the usual case with `RS` as newline and `FS` as space (fields separated by spaces or tabs). I also made a few tweaks so that `wak` compiles without forcing `char` to be unsigned. These were made without making the source or binary larger.
+
+### Introduction
+
 `wak` is a fairly compact implementation of the awk programming language.
 
 It is mostly compatible with POSIX awk, Busybox awk, mawk, and Brian Kernighan's One True Awk (the original Unix awk, aka nawk), and with gawk except for most gawk extensions to the original awk language.
