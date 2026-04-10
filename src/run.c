@@ -93,11 +93,7 @@ static struct zvalue *to_str_fmt(struct zvalue *v, int fmt_offs)
     v->vst = new_zstring("", 0);
   } else if (IS_NUM(v)) {
     zvalue_release_zstring(v);
-    if (!IS_STR(&STACK[fmt_offs])) {
-      zstring_release(&STACK[fmt_offs].vst);
-      STACK[fmt_offs].vst = num_to_zstring(STACK[fmt_offs].num, "%.6g");
-      STACK[fmt_offs].flags = ZF_STR;
-    }
+    if (!IS_STR(&STACK[fmt_offs])) FATAL("Invalid format string");
     v->vst = num_to_zstring(v->num, STACK[fmt_offs].vst->str);
   } else {
     FATAL("Wrong or unknown type in to_str_fmt\n");
@@ -161,6 +157,11 @@ static int rx_find(regex_t *rx, char *s, regoff_t *start, regoff_t *end, int efl
 // See https://www.austingroupbugs.net/view.php?id=1468.
 static int rx_find_FS(regex_t *rx, char *s, regoff_t *start, regoff_t *end, int eflags)
 {
+  if (rx == &TT.rx_default) { // common case; twice as fast as using rx_find()
+    *start = strcspn(s, " \t\n");
+    *end = strspn(s + *start, " \t\n") + *start;
+    return *start == *end ? REG_NOMATCH : 0;
+  }
   int r = rx_find(rx, s, start, end, eflags);
   if (r || *start != *end) return r;  // not found, or found non-empty match
   // Found empty match, retry starting past the match
@@ -187,28 +188,6 @@ static int get_int_val(struct zvalue *v)
   if (IS_NUM(v)) return (int)v->num;
   if (IS_STR(v) && v->vst) return (int)atof(v->vst->str);
   return 0;
-}
-
-// A single-char FS is never a regex, so make it a [<char>] regex to
-// match only that one char in case FS is a regex metachar.
-// If regex FS is needed, must use > 1 char. If a '.' regex
-// is needed, use e.g. '.|.' (unlikely case).
-static char *fmt_one_char_fs(char *fs)
-{
-  if (strlen(fs) != 1) return fs;
-  snprintf(TT.one_char_fs, sizeof(TT.one_char_fs), "[%c]", fs[0]);
-  return TT.one_char_fs;
-}
-
-static regex_t *rx_fs_prep(char *fs)
-{
-  if (!strcmp(fs, " ")) return &TT.rx_default;
-  if (!strcmp(fs, TT.fs_last)) return &TT.rx_last;
-  if (strlen(fs) >= FS_MAX) FATAL("FS too long");
-  strcpy(TT.fs_last, fs);
-  regfree(&TT.rx_last);
-  xregcomp(&TT.rx_last, fmt_one_char_fs(fs), REG_EXTENDED);
-  return &TT.rx_last;
 }
 
 // Only for use by split() builtin
@@ -260,9 +239,8 @@ static int splitter(void (*setter)(struct zmap *, int, char *, size_t), struct z
   int one_char_fs = 0;
   char *s0 = s, *fs = "";
   if (!IS_RX(zvfs)) {
-    to_str(zvfs);
-    fs = zvfs->vst->str;
-    one_char_fs = utf8cnt(zvfs->vst->str, zvfs->vst->size) == 1;
+    fs = to_str(zvfs)->vst->str;
+    one_char_fs = (*fs && !fs[1]);
   }
   // Empty string or empty fs (regex).
   // Need to include !*s b/c empty string, otherwise
@@ -283,13 +261,30 @@ static int splitter(void (*setter)(struct zmap *, int, char *, size_t), struct z
     return nf;
   }
   if (IS_RX(zvfs)) rx = zvfs->rx;
-  else rx = rx_fs_prep(fs);
+  else {
+    if (!strcmp(fs, " ")) rx = &TT.rx_default;
+    else if (!strcmp(fs, TT.fs_last)) rx = &TT.rx_last;
+    else {
+      xstrncpy(TT.fs_last, fs, FS_MAX);
+      regfree(&TT.rx_last);
+      // A single-char FS is never a regex, so make it a [<char>] regex to
+      // match only that one char in case FS is a regex metachar.
+      // If regex FS is needed, must use > 1 char. If a '.' regex
+      // is needed, use e.g. '.|.' (unlikely case).
+      if (strlen(fs) == 1) {
+        snprintf(TT.pbuf, PBUFSIZE, "[%s]", fs);
+        xregcomp(&TT.rx_last, TT.pbuf, REG_EXTENDED);
+      } else xregcomp(&TT.rx_last, fs, REG_EXTENDED);
+      rx = &TT.rx_last;
+    }
+  }
+
   while (*s) {
     // Find the next occurrence of FS.
     // rx_find_FS() returns 0 if found. If nonzero, the field will
     // be the rest of the record (all of it if first time through).
     if ((r = rx_find_FS(rx, s, &offs, &end, eflag))) offs = end = strlen(s);
-    if (setter == set_field && multiline_null_rs && one_char_fs) {
+    if (multiline_null_rs && one_char_fs && setter == set_field) {
       // Contra POSIX, if RS=="" then newline is always also a
       // field separator only if FS is a single char (see gawk manual)
       int k = strcspn(s, "\n");
@@ -491,7 +486,6 @@ static int get_set_logical(void)
   return r;
 }
 
-
 static double to_num(struct zvalue *v)
 {
   force_maybemap_to_scalar(v);
@@ -591,6 +585,7 @@ static int fflush_file(int nargs)
       if (!fflush(p->fp)) return 0;
   return -1;    // error, or file not found in table
 }
+
 static int close_file(char *fn)
 {
   // !fn (null ptr) means close all (exc. stdin/stdout/stderr)

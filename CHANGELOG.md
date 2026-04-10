@@ -2,6 +2,7 @@
 
 
 ## 2026-04-09
+- Speed up field splitting for default case (FS==" "). About twice as fast again.
 - Compile RS regex only when RS changes, not on every record read. Reads files more than twice as fast as before.
 - Simplify locale handling in main.c
 - Obviate need for compiling with -funsigned-char

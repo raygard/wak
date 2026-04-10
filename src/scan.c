@@ -220,7 +220,8 @@ static void get_string_or_regex(int endchar)
         if (endchar == '/') {
           // pass \ unmolested if not awk escape,
           // so that regex routines can see it.
-          if (!strchr(".[]()*+?{}|^$-", TT.scs->ch)) {
+          // 20260409 added sSwW<>B
+          if (!strchr("sSwW<>B.[]()*+?{}|^$-", TT.scs->ch)) {
             XERR("warning: '\\%c' -- unknown regex escape\n", TT.scs->ch);
           }
           append_this_char('\\');

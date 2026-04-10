@@ -385,6 +385,7 @@ EXTERN void *xmalloc(size_t size);
 EXTERN void *xrealloc(void *p, size_t size);
 EXTERN void *xzalloc(size_t size);
 EXTERN char *xstrdup(char *s);
+EXTERN void xstrncpy(char *dest, char *src, size_t size);
 EXTERN int hexval(int c);
 EXTERN struct zlist *zlist_initx(struct zlist *p, size_t size, size_t count);
 EXTERN struct zlist *zlist_init(struct zlist *p, size_t size);

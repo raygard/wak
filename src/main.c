@@ -10,7 +10,7 @@
 ////////////////////
 
 #ifndef FOR_TOYBOX
-char *version = "26.04 20260405";
+char *version = "26.04 20260409";
 
 #endif  // FOR_TOYBOX
 static void progfiles_init(char *progstring, struct arg_list *prog_args)

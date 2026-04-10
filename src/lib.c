@@ -154,6 +154,12 @@ EXTERN char *xstrdup(char *s)
   return p;
 }
 
+EXTERN void xstrncpy(char *dest, char *src, size_t size)
+{
+  if (strlen(src) >= size) error_exit("xstrncpy(%d)", size);
+  strcpy(dest, src);
+}
+
 #endif  // FOR_TOYBOX
 EXTERN int hexval(int c)
 {
