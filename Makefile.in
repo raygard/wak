@@ -103,7 +103,7 @@ clean:
 install: ./wak
 	mkdir -p $(prefix)/bin
 	cp $? $(prefix)/bin/
-	chmod 775 $(prefix)/bin/wak
+	chmod 755 $(prefix)/bin/wak
 
 uninstall: ./wak
 	for i in $?; do rm $(prefix)/bin/$$i; done
